@@ -26,7 +26,7 @@
    <item>
     <layout class="QVBoxLayout">
      <item>
-      <widget class="KCalcDisplay" name="calc_display">
+      <widget class="KCalcDisplay2" name="calc_display">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
          <horstretch>0</horstretch>
@@ -36,12 +36,13 @@
        <property name="focusPolicy">
         <enum>Qt::StrongFocus</enum>
        </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Sunken</enum>
-       </property>
+       <!-- TODO -->
+       <!-- <property name="frameShape"> -->
+       <!--  <enum>QFrame::StyledPanel</enum> -->
+       <!-- </property> -->
+       <!-- <property name="frameShadow"> -->
+       <!--  <enum>QFrame::Sunken</enum> -->
+       <!-- </property> -->
       </widget>
      </item>
      <item>
