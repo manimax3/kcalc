@@ -91,6 +91,7 @@ set(kcalc_KDEINIT_SRCS ${libknumber_la_SRCS}
    kcalc_const_menu.cpp 
    kcalc_core.cpp 
    kcalcdisplay.cpp 
+   kcalcdisplay2.cpp 
    kcalc_statusbar.cpp
    stats.cpp )
 
