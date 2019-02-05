@@ -987,11 +987,17 @@
    <header>kcalc_button.h</header>
   </customwidget>
   <customwidget>
-   <class>KCalcDisplay</class>
-   <extends>QFrame</extends>
-   <header>kcalcdisplay.h</header>
-   <container>1</container>
+   <class>KCalcDisplay2</class>
+   <extends>QLineEdit</extends>
+   <header>kcalcdisplay2.h</header>
   </customwidget>
+  <!-- TODO -->
+  <!-- <customwidget> -->
+  <!--  <class>KCalcDisplay</class> -->
+  <!--  <extends>QFrame</extends> -->
+  <!--  <header>kcalcdisplay.h</header> -->
+  <!--  <container>1</container> -->
+  <!-- </customwidget> -->
   <customwidget>
    <class>KCalcBitset</class>
    <extends>QWidget</extends>

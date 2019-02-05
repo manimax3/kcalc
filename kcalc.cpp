@@ -52,7 +52,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "kcalc_const_menu.h"
 #include "kcalc_settings.h"
 #include "kcalc_statusbar.h"
-#include "kcalcdisplay.h"
+/* #include "kcalcdisplay.h" */
 #include "kcalcdisplay2.h"
 
 namespace {
