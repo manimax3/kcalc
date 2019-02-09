@@ -35,20 +35,25 @@ public:
     void addFunctionToken(QString functionName);
     void setNumberMode(NumMode mode);
 
-    void setExpressionString(QString expression);
+    void setExpressionString(const QString &expression);
 
     bool isValidDigit(const QChar &ch) const;
-    int isNumberNext() const;
-    QStringView isFunctionNext() const;
 
-    KCalcToken readNextToken();
+    /**
+     * Gurantees:
+     *  - input != end
+     *  - input points to an unread element
+     *  - input needs to be increaded for every read element
+     */
+    KCalcToken functionMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
+    KCalcToken numberMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
+    KCalcToken operatorMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
+
     QList<KCalcToken> parse();
 
 private:
     NumMode current_Mode_;
     QString expression_;
-    int current_Pos_ = 0;
-    QList<KCalcToken> tokens_;
     QList<QString> function_Names_;
 };
 

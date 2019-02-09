@@ -24,11 +24,15 @@ void KCalcTokenizer::setNumberMode(NumMode mode)
     current_Mode_ = mode;
 }
 
-void KCalcTokenizer::setExpressionString(QString expression)
+void KCalcTokenizer::setExpressionString(const QString &expression)
 {
-    expression_ = std::move(expression);
-    current_Pos_ = 0;
-    tokens_.clear();
+    expression_.clear();
+
+    for (const auto &ch : expression) {
+        if (ch.isSpace())
+            continue;
+        expression_.append(ch);
+    }
 }
 
 bool KCalcTokenizer::isValidDigit(const QChar &ch) const
@@ -40,28 +44,20 @@ bool KCalcTokenizer::isValidDigit(const QChar &ch) const
     case 'C':
     case 'B':
     case 'A':
-        if (current_Mode_ == HEX) {
-            return true;
-        }
+        return current_Mode_ == HEX;
     case '9':
     case '8':
-        if (current_Mode_ == DEC || current_Mode_ == HEX) {
-            return true;
-        }
+        return (current_Mode_ == DEC || current_Mode_ == HEX);
     case '7':
     case '6':
     case '5':
     case '4':
     case '3':
     case '2':
-        if (current_Mode_ == OCT || current_Mode_ == DEC || current_Mode_ == HEX) {
-            return true;
-        }
+        return (current_Mode_ == OCT || current_Mode_ == DEC || current_Mode_ == HEX);
     case '1':
     case '0':
-        if (current_Mode_ == BIN || current_Mode_ == OCT || current_Mode_ == DEC || current_Mode_ == HEX) {
-            return true;
-        }
+        return (current_Mode_ == BIN || current_Mode_ == OCT || current_Mode_ == DEC || current_Mode_ == HEX);
     default:
         return false;
     }
@@ -69,100 +65,116 @@ bool KCalcTokenizer::isValidDigit(const QChar &ch) const
     return false;
 }
 
-int KCalcTokenizer::isNumberNext() const
+KCalcToken KCalcTokenizer::numberMatcher(QString::Iterator &input, const QString::Iterator &end, int pos)
 {
-    int i = current_Pos_;
+    auto input_org = input;
 
-    while (i < expression_.length() && isValidDigit(expression_.at(i))) {
-        ++i;
+    KCalcToken token {
+        QString(),
+        pos,
+        INVALID
+    };
+
+    while (isValidDigit(*input) && input != end) {
+        token.value.append(*input);
+        ++input;
     }
 
-    if (i > current_Pos_ && i < expression_.length() && expression_.at(i) == QLocale().decimalPoint()) {
-        // At least one digit found and are now at a decimal point
-        const int prev = ++i;
-        while (i < expression_.length() && isValidDigit(expression_.at(i))) {
-            ++i;
-        }
+    // TODO: Without a further check this allows .1
+    if (input != end && *input == QLocale().decimalPoint()) {
+        token.value.append(*(input++));
 
-        if (prev == i) {
-            // No further digits found
-            // TODO: Should this be valid input: 12.
-            /* return -1; */
+        while (isValidDigit(*input) && input != end) {
+            token.value.append(*input);
+            ++input;
         }
     }
 
-    return i - current_Pos_;
+    token.type = input_org == input ? INVALID : NUMBER;
+    return token;
 }
 
-QStringView KCalcTokenizer::isFunctionNext() const
+KCalcToken KCalcTokenizer::operatorMatcher(QString::Iterator &input, const QString::Iterator &end, int pos)
 {
-    const QString start = expression_.right(expression_.length() - current_Pos_);
-    for (const auto &func : function_Names_) {
-        if (start.startsWith(func, Qt::CaseInsensitive)) {
-            return func;
-        }
-    }
-
-    return QStringView();
-}
-
-KCalcToken KCalcTokenizer::readNextToken()
-{
-    while (current_Pos_ < expression_.length() && expression_.at(current_Pos_).isSpace())
-        current_Pos_++;
-
-    if (current_Pos_ >= expression_.length()) {
-        return { QString(), 0, INVALID };
-    }
-
-    const QChar currentChar = expression_.at(current_Pos_);
+    Q_UNUSED(end);
+    const QChar currentChar = *input;
 
     if (currentChar == QLatin1Char('+')) {
-        return { QStringLiteral("+"), current_Pos_++, PLUS };
+        ++input;
+        return { QStringLiteral("+"), pos, PLUS };
     } else if (currentChar == QLatin1Char('-')) {
-        return { QStringLiteral("-"), current_Pos_++, MINUS };
+        ++input;
+        return { QStringLiteral("-"), pos, MINUS };
     } else if (currentChar == QLatin1Char('*')) {
-        return { QStringLiteral("*"), current_Pos_++, MULT };
+        ++input;
+        return { QStringLiteral("*"), pos, MULT };
     } else if (currentChar == QLatin1Char('/')) {
-        return { QStringLiteral("/"), current_Pos_++, DIV };
+        ++input;
+        return { QStringLiteral("/"), pos, DIV };
     } else if (currentChar == QLatin1Char('(')) {
-        return { QStringLiteral("("), current_Pos_++, BRACK_OPEN };
+        ++input;
+        return { QStringLiteral("("), pos, BRACK_OPEN };
     } else if (currentChar == QLatin1Char(')')) {
-        return { QStringLiteral(")"), current_Pos_++, BRACK_CLOSE };
+        ++input;
+        return { QStringLiteral(")"), pos, BRACK_CLOSE };
     } else if (currentChar == QLatin1Char('^')) {
-        return { QStringLiteral("^"), current_Pos_++, PWR };
+        ++input;
+        return { QStringLiteral("^"), pos, PWR };
     }
 
-    const QStringView function = isFunctionNext();
+    return { QString(), pos, INVALID };
+}
 
-    if (function.length() > 0) {
-        KCalcToken token { QString(function.toString()), current_Pos_, FUNCTION_NAME };
-        current_Pos_ += function.length();
-        return token;
+KCalcToken KCalcTokenizer::functionMatcher(QString::Iterator &input, const QString::Iterator &end, int pos)
+{
+    const auto readeableCharacters = end - input;
+    QString start;
+
+    for (int i = 0; i < readeableCharacters; ++i) {
+        start.append(*input);
+        ++input;
     }
 
-    const int numberFound = isNumberNext();
+    input -= readeableCharacters;
 
-    if (numberFound > 0) {
-        KCalcToken token { expression_.right(expression_.length() - current_Pos_).left(numberFound),
-                           current_Pos_,
-                           NUMBER };
-        current_Pos_ += numberFound;
-        return token;
+    for (const auto &func : function_Names_) {
+        if (start.startsWith(func, Qt::CaseInsensitive)) {
+            input += func.length();
+            return { func, pos, FUNCTION_NAME };
+        }
     }
 
-    return { QString(), 0, INVALID };
+    return { QString(), pos, INVALID };
 }
 
 QList<KCalcToken> KCalcTokenizer::parse()
 {
-    // TODO: Do-while loop instead
-    KCalcToken currentToken = readNextToken();
-    while (currentToken.type != INVALID && current_Pos_ != expression_.length()) {
-        tokens_.push_back(currentToken);
-        currentToken = readNextToken();
+    auto begin = expression_.begin();
+    const auto end = expression_.end();
+    QList<KCalcToken> tokens;
+
+    while (begin != end) {
+        KCalcToken token;
+        token = operatorMatcher(begin, end, expression_.begin() - begin);
+
+        if (token.type == INVALID) {
+            token = functionMatcher(begin, end, expression_.begin() - begin);
+        }
+
+        if (token.type == INVALID) {
+            token = numberMatcher(begin, end, expression_.begin() - begin);
+        }
+
+        if (token.type == INVALID) {
+            token.startPos = expression_.begin() - begin;
+            token.value.append(*begin);
+            ++begin;
+        }
+
+        tokens.push_back(token);
     }
-    return tokens_;
+
+    return tokens;
 }
 
 #include <iostream>
@@ -173,7 +185,7 @@ int main()
     tokenizer.addFunctionToken(QStringLiteral("cos"));
     tokenizer.addFunctionToken(QStringLiteral("func"));
 
-    tokenizer.setNumberMode(DEC); // TODO: Doesnt work
+    tokenizer.setNumberMode(HEX); // TODO: Doesnt work
     tokenizer.setExpressionString(QStringLiteral("sIn(F*AA)+100,0 cos+")); // TODO: Anything at the end of a string doesnt work
 
     auto list = tokenizer.parse();
