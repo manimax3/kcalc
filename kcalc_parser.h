@@ -5,14 +5,10 @@
 
 enum TokenType {
     NUMBER,
-    PLUS,
-    MINUS,
-    MULT,
-    DIV,
+    OPERATOR,
     BRACK_OPEN,
     BRACK_CLOSE,
     FUNCTION_NAME,
-    PWR,
     INVALID
 };
 
@@ -39,6 +35,9 @@ public:
 
     bool isValidDigit(const QChar &ch) const;
 
+    // Checks if the input is/could be the start of a function
+    bool followsFunction(const QString::Iterator &input, const QString::Iterator &end) const;
+
     /**
      * Gurantees:
      *  - input != end
@@ -47,7 +46,8 @@ public:
      */
     KCalcToken functionMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
     KCalcToken numberMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
-    KCalcToken operatorMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
+
+    /* void skipWhiteSpace(QString::Iterator &input, const QString::Iterator &end, int &pos); */
 
     QList<KCalcToken> parse();
 

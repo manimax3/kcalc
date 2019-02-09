@@ -4,6 +4,8 @@
 #include <QChar>
 #include <QDebug>
 
+#include <array>
+
 void KCalcTokenizer::addFunctionToken(QString functionName)
 {
     bool found = false;
@@ -26,7 +28,7 @@ void KCalcTokenizer::setNumberMode(NumMode mode)
 
 void KCalcTokenizer::setExpressionString(const QString &expression)
 {
-    expression_.clear();
+    expression_ = expression;
 
     for (const auto &ch : expression) {
         if (ch.isSpace())
@@ -65,6 +67,19 @@ bool KCalcTokenizer::isValidDigit(const QChar &ch) const
     return false;
 }
 
+bool KCalcTokenizer::followsFunction(const QString::Iterator &input, const QString::Iterator &end) const
+{
+    QStringView remainder(input, end - input);
+
+    for (const auto &func : function_Names_) {
+        if (remainder.startsWith(func, Qt::CaseInsensitive)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 KCalcToken KCalcTokenizer::numberMatcher(QString::Iterator &input, const QString::Iterator &end, int pos)
 {
     auto input_org = input;
@@ -75,7 +90,7 @@ KCalcToken KCalcTokenizer::numberMatcher(QString::Iterator &input, const QString
         INVALID
     };
 
-    while (isValidDigit(*input) && input != end) {
+    while (isValidDigit(*input) && input != end && !followsFunction(input, end)) {
         token.value.append(*input);
         ++input;
     }
@@ -84,7 +99,7 @@ KCalcToken KCalcTokenizer::numberMatcher(QString::Iterator &input, const QString
     if (input != end && *input == QLocale().decimalPoint()) {
         token.value.append(*(input++));
 
-        while (isValidDigit(*input) && input != end) {
+        while (isValidDigit(*input) && input != end && !followsFunction(input, end)) {
             token.value.append(*input);
             ++input;
         }
@@ -94,42 +109,13 @@ KCalcToken KCalcTokenizer::numberMatcher(QString::Iterator &input, const QString
     return token;
 }
 
-KCalcToken KCalcTokenizer::operatorMatcher(QString::Iterator &input, const QString::Iterator &end, int pos)
-{
-    Q_UNUSED(end);
-    const QChar currentChar = *input;
-
-    if (currentChar == QLatin1Char('+')) {
-        ++input;
-        return { QStringLiteral("+"), pos, PLUS };
-    } else if (currentChar == QLatin1Char('-')) {
-        ++input;
-        return { QStringLiteral("-"), pos, MINUS };
-    } else if (currentChar == QLatin1Char('*')) {
-        ++input;
-        return { QStringLiteral("*"), pos, MULT };
-    } else if (currentChar == QLatin1Char('/')) {
-        ++input;
-        return { QStringLiteral("/"), pos, DIV };
-    } else if (currentChar == QLatin1Char('(')) {
-        ++input;
-        return { QStringLiteral("("), pos, BRACK_OPEN };
-    } else if (currentChar == QLatin1Char(')')) {
-        ++input;
-        return { QStringLiteral(")"), pos, BRACK_CLOSE };
-    } else if (currentChar == QLatin1Char('^')) {
-        ++input;
-        return { QStringLiteral("^"), pos, PWR };
-    }
-
-    return { QString(), pos, INVALID };
-}
-
 KCalcToken KCalcTokenizer::functionMatcher(QString::Iterator &input, const QString::Iterator &end, int pos)
 {
+    /* skipWhiteSpace(input, end, pos); */
     const auto readeableCharacters = end - input;
     QString start;
 
+    // TODO We can do that more efficient
     for (int i = 0; i < readeableCharacters; ++i) {
         start.append(*input);
         ++input;
@@ -147,19 +133,26 @@ KCalcToken KCalcTokenizer::functionMatcher(QString::Iterator &input, const QStri
     return { QString(), pos, INVALID };
 }
 
+/* void KCalcTokenizer::skipWhiteSpace(QString::Iterator &input, const QString::Iterator &end, int &pos) */
+/* { */
+/*     while (input != end && input->isSpace()) { */
+/*         ++input; */
+/*         ++pos; */
+/*     } */
+/* } */
+
 QList<KCalcToken> KCalcTokenizer::parse()
 {
     auto begin = expression_.begin();
     const auto end = expression_.end();
     QList<KCalcToken> tokens;
 
-    while (begin != end) {
-        KCalcToken token;
-        token = operatorMatcher(begin, end, expression_.begin() - begin);
+    // TODO Maybe add an overload without int pos
+    /* int skipper = 0; */
+    /* skipWhiteSpace(begin, end, skipper); */
 
-        if (token.type == INVALID) {
-            token = functionMatcher(begin, end, expression_.begin() - begin);
-        }
+    while (begin != end) {
+        KCalcToken token = functionMatcher(begin, end, expression_.begin() - begin);
 
         if (token.type == INVALID) {
             token = numberMatcher(begin, end, expression_.begin() - begin);
@@ -184,14 +177,21 @@ int main()
     tokenizer.addFunctionToken(QStringLiteral("sin"));
     tokenizer.addFunctionToken(QStringLiteral("cos"));
     tokenizer.addFunctionToken(QStringLiteral("func"));
+    tokenizer.addFunctionToken(QStringLiteral("+"));
+    tokenizer.addFunctionToken(QStringLiteral("-"));
+    tokenizer.addFunctionToken(QStringLiteral("^"));
+    tokenizer.addFunctionToken(QStringLiteral("*"));
+    tokenizer.addFunctionToken(QStringLiteral("/"));
+    tokenizer.addFunctionToken(QStringLiteral("("));
+    tokenizer.addFunctionToken(QStringLiteral(")"));
 
     tokenizer.setNumberMode(HEX); // TODO: Doesnt work
-    tokenizer.setExpressionString(QStringLiteral("sIn(F*AA)+100,0 cos+")); // TODO: Anything at the end of a string doesnt work
+    tokenizer.setExpressionString(QStringLiteral("sIn(F*AA)+100,0fffunc() AAcos+")); // TODO: Anything at the end of a string doesnt work
 
     auto list = tokenizer.parse();
 
     for (const auto &t : list) {
-        std::cout << t.value.toStdString() << std::endl;
+        std::cout << t.type << ":" << t.value.toStdString() << std::endl;
     }
 
     return 0;
