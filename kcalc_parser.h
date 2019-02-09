@@ -3,30 +3,53 @@
 
 #include <QStack>
 
-class ExpressionToken {
-    public:
-        virtual ~ExpressionTokenType() = default;
+enum TokenType {
+    NUMBER,
+    PLUS,
+    MINUS,
+    MULT,
+    DIV,
+    BRACK_OPEN,
+    BRACK_CLOSE,
+    FUNCTION_NAME,
+    PWR,
+    INVALID
 };
 
-class ExpressionTokenType
+enum NumMode {
+    DEC,
+    HEX,
+    OCT,
+    BIN
+};
+
+struct KCalcToken {
+    QString value;
+    int startPos;
+    TokenType type;
+};
+
+class KCalcTokenizer
 {
 public:
-    enum Associativity {
-        LEFT,
-        RIGHT
-    };
+    void addFunctionToken(QString functionName);
+    void setNumberMode(NumMode mode);
 
-    explicit ExpressionTokenType(int precedence, Associativity associativity = LEFT);
-    virtual ~ExpressionTokenType() = default;
+    void setExpressionString(QString expression);
 
-    int getPrecedence() const;
-    Associativity getAssociativity() const;
+    bool isValidDigit(const QChar &ch) const;
+    int isNumberNext() const;
+    QStringView isFunctionNext() const;
 
-    virtual ExpressionToken *matchSequence(const QString &seq, int &pos) = 0;
+    KCalcToken readNextToken();
+    QList<KCalcToken> parse();
 
 private:
-    int precedence_;
-    Associativity associativity_;
+    NumMode current_Mode_;
+    QString expression_;
+    int current_Pos_ = 0;
+    QList<KCalcToken> tokens_;
+    QList<QString> function_Names_;
 };
 
 #endif
