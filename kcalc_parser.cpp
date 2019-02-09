@@ -28,7 +28,7 @@ void KCalcTokenizer::setNumberMode(NumMode mode)
 
 void KCalcTokenizer::setExpressionString(const QString &expression)
 {
-    expression_ = expression;
+    expression_.clear();
 
     for (const auto &ch : expression) {
         if (ch.isSpace())
@@ -133,33 +133,22 @@ KCalcToken KCalcTokenizer::functionMatcher(QString::Iterator &input, const QStri
     return { QString(), pos, INVALID };
 }
 
-/* void KCalcTokenizer::skipWhiteSpace(QString::Iterator &input, const QString::Iterator &end, int &pos) */
-/* { */
-/*     while (input != end && input->isSpace()) { */
-/*         ++input; */
-/*         ++pos; */
-/*     } */
-/* } */
-
 QList<KCalcToken> KCalcTokenizer::parse()
 {
     auto begin = expression_.begin();
     const auto end = expression_.end();
     QList<KCalcToken> tokens;
 
-    // TODO Maybe add an overload without int pos
-    /* int skipper = 0; */
-    /* skipWhiteSpace(begin, end, skipper); */
-
     while (begin != end) {
-        KCalcToken token = functionMatcher(begin, end, expression_.begin() - begin);
+        const auto pos = begin - expression_.begin();
+        KCalcToken token = functionMatcher(begin, end, pos);
 
         if (token.type == INVALID) {
-            token = numberMatcher(begin, end, expression_.begin() - begin);
+            token = numberMatcher(begin, end, pos);
         }
 
         if (token.type == INVALID) {
-            token.startPos = expression_.begin() - begin;
+            token.startPos = pos;
             token.value.append(*begin);
             ++begin;
         }
@@ -185,13 +174,13 @@ int main()
     tokenizer.addFunctionToken(QStringLiteral("("));
     tokenizer.addFunctionToken(QStringLiteral(")"));
 
-    tokenizer.setNumberMode(HEX); // TODO: Doesnt work
-    tokenizer.setExpressionString(QStringLiteral("sIn(F*AA)+100,0fffunc() AAcos+")); // TODO: Anything at the end of a string doesnt work
+    tokenizer.setNumberMode(HEX);
+    tokenizer.setExpressionString(QStringLiteral("12,sIn(F*AA)+100,0fffunc() AAcos+"));
 
     auto list = tokenizer.parse();
 
     for (const auto &t : list) {
-        std::cout << t.type << ":" << t.value.toStdString() << std::endl;
+        std::cout << t.type << ":" << t.value.toStdString() << " - " << t.startPos << std::endl;
     }
 
     return 0;

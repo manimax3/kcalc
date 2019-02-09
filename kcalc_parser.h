@@ -30,12 +30,8 @@ class KCalcTokenizer
 public:
     void addFunctionToken(QString functionName);
     void setNumberMode(NumMode mode);
-
     void setExpressionString(const QString &expression);
-
     bool isValidDigit(const QChar &ch) const;
-
-    // Checks if the input is/could be the start of a function
     bool followsFunction(const QString::Iterator &input, const QString::Iterator &end) const;
 
     /**
@@ -46,8 +42,6 @@ public:
      */
     KCalcToken functionMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
     KCalcToken numberMatcher(QString::Iterator &input, const QString::Iterator &end, int pos);
-
-    /* void skipWhiteSpace(QString::Iterator &input, const QString::Iterator &end, int &pos); */
 
     QList<KCalcToken> parse();
 
