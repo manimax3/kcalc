@@ -2,9 +2,6 @@
 
 #include <QLocale>
 #include <QChar>
-#include <QDebug>
-
-#include <array>
 
 void KCalcTokenizer::addFunctionToken(QString functionName)
 {
