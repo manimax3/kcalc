@@ -181,6 +181,23 @@ int NodeEvaluator::getOperandCount() const
     return operandCount_;
 }
 
+KCalcParser::KCalcParser(QObject *parent)
+    : QObject(parent)
+{
+    invalidNodeEvaluator_ = new InvalidNode;
+}
+
+KCalcParser::~KCalcParser()
+{
+    for (auto &mode : evaluators_) {
+        for (auto &node : mode) {
+            delete node;
+        }
+    }
+
+    delete invalidNodeEvaluator_;
+}
+
 void KCalcParser::registerNode(const QString &mode, NodeEvaluator *node)
 {
     // TODO Some checks here
@@ -204,21 +221,28 @@ NodeEvaluator *KCalcParser::findEvaluator(const KCalcToken &token) const
     return nullptr;
 }
 
+InvalidNode *KCalcParser::getInvalidNodeEvaluator()
+{
+    return invalidNodeEvaluator_;
+}
+
 QList<QPair<KCalcToken, NodeEvaluator *>> KCalcParser::parseTokens(const QList<KCalcToken> &tokens)
 {
     QList<QPair<KCalcToken, NodeEvaluator *>> matchedNodes;
     QStack<QPair<KCalcToken, NodeEvaluator *>> tokenStack;
 
     for (const auto &token : tokens) {
-        // TODO Maybe allow this in order to handle this with custom nodes
-        if (token.type == INVALID) {
-            return {};
-        }
-
         auto *evaluator = findEvaluator(token);
 
+        if (token.type == INVALID) {
+            emit foundInvalidTokens();
+            continue;
+        }
+
         if (!evaluator) {
-            return {};
+            matchedNodes.push_back({ token, getInvalidNodeEvaluator() });
+            emit foundUnhandledTokens();
+            continue;
         }
 
         if (token.type == NUMBER) {
@@ -251,7 +275,7 @@ QList<QPair<KCalcToken, NodeEvaluator *>> KCalcParser::parseTokens(const QList<K
             }
 
             if (tokenStack.size() == 0) {
-                // Mismatched brackets
+                emit foundMismatchedBrackets();
             } else {
                 tokenStack.pop();
             }
@@ -260,7 +284,7 @@ QList<QPair<KCalcToken, NodeEvaluator *>> KCalcParser::parseTokens(const QList<K
 
     while (tokenStack.size() > 0) {
         if (isOneOf(tokenStack.top().first.type, BRACKET_OPEN, BRACKET_CLOSE)) {
-            // Mismatched brackets
+            emit foundMismatchedBrackets();
             tokenStack.pop();
             continue;
         }
@@ -280,8 +304,9 @@ bool PowerNode::accepts(const KCalcToken &token) const
     return token.type == OP_PWR;
 }
 
-KNumber PowerNode::evaluate(const KCalcToken &, QList<KNumber>)
+KNumber PowerNode::evaluate(const KCalcToken &, QList<KNumber> numbers)
 {
+    Q_UNUSED(numbers);
     return KNumber::Zero;
 }
 
@@ -359,6 +384,22 @@ KNumber NumberNode::evaluate(const KCalcToken &, QList<KNumber>)
     return KNumber::Zero;
 }
 
+InvalidNode::InvalidNode()
+    : NodeEvaluator(-1, LEFT)
+{
+}
+
+bool InvalidNode::accepts(const KCalcToken &) const
+{
+    return true; // We accept all tokens as valid
+}
+
+KNumber InvalidNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    Q_ASSERT("Tried to evaluate invalid node" && false);
+    return KNumber::Zero;
+}
+
 #include <iostream>
 int main()
 {
@@ -376,7 +417,7 @@ int main()
     parser.registerNode(QStringLiteral("main"), new FunctionNode);
     parser.registerNode(QStringLiteral("main"), new NumberNode);
 
-    auto list = tokenizer.parse(QStringLiteral("10 + 20 + 30"), HEX);
+    auto list = tokenizer.parse(QStringLiteral("10 (+ 20 + 30"), HEX);
     auto result = parser.parseTokens(list);
 
     /* auto list = tokenizer.parse(); */

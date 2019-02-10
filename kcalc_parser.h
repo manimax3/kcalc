@@ -1,13 +1,10 @@
 #ifndef KCALC_PARSER_H
 #define KCALC_PARSER_H value
 
-/* #include "knumber/knumber.h" */
+#include "knumber/knumber.h"
 #include <QStack>
 #include <QMap>
-
-struct KNumber {
-    static KNumber Zero;
-};
+#include <QObject>
 
 enum TokenType {
     NUMBER, // 0
@@ -59,6 +56,8 @@ enum Notation {
     PREFIX
 };
 
+class InvalidNode;
+
 class NodeEvaluator
 {
 public:
@@ -83,14 +82,24 @@ private:
     int operandCount_;
 };
 
-class KCalcParser
+class KCalcParser : public QObject
 {
+    Q_OBJECT
 public:
+    KCalcParser(QObject *parent = nullptr);
+    ~KCalcParser();
+
     KCalcTokenizer &getTokenizer() { return tokenizer_; };
 
     void registerNode(const QString &mode, NodeEvaluator *NodeEvaluator);
     void setActiveMode(const QString &mode);
     QList<QPair<KCalcToken, NodeEvaluator *>> parseTokens(const QList<KCalcToken> &tokesn);
+    InvalidNode *getInvalidNodeEvaluator();
+
+Q_SIGNALS:
+    void foundMismatchedBrackets();
+    void foundInvalidTokens();
+    void foundUnhandledTokens();
 
 private:
     NodeEvaluator *findEvaluator(const KCalcToken &token) const;
@@ -98,6 +107,7 @@ private:
     QMap<QString, QList<NodeEvaluator *>> evaluators_;
     KCalcTokenizer tokenizer_;
     QString activeMode_;
+    InvalidNode *invalidNodeEvaluator_;
 };
 
 class PowerNode : public NodeEvaluator
@@ -144,6 +154,14 @@ class NumberNode : public NodeEvaluator
 {
 public:
     explicit NumberNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
+class InvalidNode : public NodeEvaluator
+{
+public:
+    explicit InvalidNode();
     bool accepts(const KCalcToken &token) const override;
     KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
 };
