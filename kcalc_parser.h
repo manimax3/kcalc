@@ -100,4 +100,52 @@ private:
     QString activeMode_;
 };
 
+class PowerNode : public NodeEvaluator
+{
+public:
+    explicit PowerNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
+class MultiplicationNode : public NodeEvaluator
+{
+public:
+    explicit MultiplicationNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
+class AdditionNode : public NodeEvaluator
+{
+public:
+    explicit AdditionNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
+class BracketNode : public NodeEvaluator
+{
+public:
+    explicit BracketNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
+class FunctionNode : public NodeEvaluator
+{
+public:
+    explicit FunctionNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
+class NumberNode : public NodeEvaluator
+{
+public:
+    explicit NumberNode();
+    bool accepts(const KCalcToken &token) const override;
+    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+};
+
 #endif

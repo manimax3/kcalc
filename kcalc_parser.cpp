@@ -271,111 +271,95 @@ QList<QPair<KCalcToken, NodeEvaluator *>> KCalcParser::parseTokens(const QList<K
     return matchedNodes;
 }
 
+PowerNode::PowerNode()
+    : NodeEvaluator(4, RIGHT)
+{
+}
+bool PowerNode::accepts(const KCalcToken &token) const
+{
+    return token.type == OP_PWR;
+}
+
+KNumber PowerNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    return KNumber::Zero;
+}
+
+MultiplicationNode::MultiplicationNode()
+    : NodeEvaluator(3, LEFT)
+{
+}
+bool MultiplicationNode::accepts(const KCalcToken &token) const
+{
+    return isOneOf(token.type, OP_DIV, OP_MULT);
+}
+
+KNumber MultiplicationNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    return KNumber::Zero;
+}
+
+AdditionNode::AdditionNode()
+    : NodeEvaluator(2, LEFT)
+{
+}
+
+bool AdditionNode::accepts(const KCalcToken &token) const
+{
+    return isOneOf(token.type, OP_PLUS, OP_MINUS);
+}
+
+KNumber AdditionNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    return KNumber::Zero;
+}
+
+BracketNode::BracketNode()
+    : NodeEvaluator(1, LEFT)
+{
+}
+
+bool BracketNode::accepts(const KCalcToken &token) const
+{
+    return isOneOf(token.type, BRACKET_OPEN, BRACKET_CLOSE);
+}
+
+KNumber BracketNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    return KNumber::Zero;
+}
+
+FunctionNode::FunctionNode()
+    : NodeEvaluator(0, LEFT)
+{
+}
+
+bool FunctionNode::accepts(const KCalcToken &token) const
+{
+    return token.type == FUNCTION;
+}
+
+KNumber FunctionNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    return KNumber::Zero;
+}
+
+NumberNode::NumberNode()
+    : NodeEvaluator(-1, LEFT)
+{
+}
+
+bool NumberNode::accepts(const KCalcToken &token) const
+{
+    return token.type == NUMBER;
+}
+
+KNumber NumberNode::evaluate(const KCalcToken &, QList<KNumber>)
+{
+    return KNumber::Zero;
+}
+
 #include <iostream>
-
-class PowerNode : public NodeEvaluator
-{
-public:
-    explicit PowerNode()
-        : NodeEvaluator(4, RIGHT)
-    {
-    }
-    virtual bool accepts(const KCalcToken &token) const override
-    {
-        return token.type == OP_PWR;
-    }
-
-    virtual KNumber evaluate(const KCalcToken &, QList<KNumber>) override
-    {
-        return KNumber::Zero;
-    }
-};
-class MultiplicationNode : public NodeEvaluator
-{
-public:
-    explicit MultiplicationNode()
-        : NodeEvaluator(3, LEFT)
-    {
-    }
-    virtual bool accepts(const KCalcToken &token) const override
-    {
-        return isOneOf(token.type, OP_DIV, OP_MULT);
-    }
-
-    virtual KNumber evaluate(const KCalcToken &, QList<KNumber>) override
-    {
-        return KNumber::Zero;
-    }
-};
-class AdditionNode : public NodeEvaluator
-{
-public:
-    explicit AdditionNode()
-        : NodeEvaluator(2, LEFT)
-    {
-    }
-    virtual bool accepts(const KCalcToken &token) const override
-    {
-        return isOneOf(token.type, OP_PLUS, OP_MINUS);
-    }
-
-    virtual KNumber evaluate(const KCalcToken &, QList<KNumber>) override
-    {
-        return KNumber::Zero;
-    }
-};
-class BracketNode : public NodeEvaluator
-{
-public:
-    explicit BracketNode()
-        : NodeEvaluator(1, LEFT)
-    {
-    }
-    virtual bool accepts(const KCalcToken &token) const override
-    {
-        return isOneOf(token.type, BRACKET_OPEN, BRACKET_CLOSE);
-    }
-
-    virtual KNumber evaluate(const KCalcToken &, QList<KNumber>) override
-    {
-        return KNumber::Zero;
-    }
-};
-class FunctionNode : public NodeEvaluator
-{
-public:
-    explicit FunctionNode()
-        : NodeEvaluator(0, LEFT)
-    {
-    }
-    virtual bool accepts(const KCalcToken &token) const override
-    {
-        return token.type == FUNCTION;
-    }
-
-    virtual KNumber evaluate(const KCalcToken &, QList<KNumber>) override
-    {
-        return KNumber::Zero;
-    }
-};
-class NumberNode : public NodeEvaluator
-{
-public:
-    explicit NumberNode()
-        : NodeEvaluator(-1, LEFT)
-    {
-    }
-    virtual bool accepts(const KCalcToken &token) const override
-    {
-        return token.type == NUMBER;
-    }
-
-    virtual KNumber evaluate(const KCalcToken &, QList<KNumber>) override
-    {
-        return KNumber::Zero;
-    }
-};
-
 int main()
 {
     KCalcParser parser;
@@ -392,7 +376,7 @@ int main()
     parser.registerNode(QStringLiteral("main"), new FunctionNode);
     parser.registerNode(QStringLiteral("main"), new NumberNode);
 
-    auto list = tokenizer.parse(QStringLiteral("sin(FF+10)*20"), HEX);
+    auto list = tokenizer.parse(QStringLiteral("10 + 20 + 30"), HEX);
     auto result = parser.parseTokens(list);
 
     /* auto list = tokenizer.parse(); */
