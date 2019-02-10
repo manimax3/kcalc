@@ -29,6 +29,7 @@ ecm_setup_version(${KDE_APPLICATIONS_VERSION} VARIABLE_PREFIX KCALC
 find_package (Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
     Core
     Widgets
+    Test
 )
 
 find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS
@@ -108,6 +109,7 @@ kconfig_add_kcfg_files(kcalc_KDEINIT_SRCS kcalc_settings.kcfgc )
 file(GLOB ICONS_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/icons/*.png")
 ecm_add_app_icon(kcalc_KDEINIT_SRCS ICONS ${ICONS_SRCS})
 
+add_library(kcalc_lib STATIC ${kcalc_KDEINIT_SRCS})
 kf5_add_kdeinit_executable( kcalc ${kcalc_KDEINIT_SRCS})
 
 target_link_libraries(kdeinit_kcalc
@@ -122,6 +124,22 @@ target_link_libraries(kdeinit_kcalc
     ${GMP_LIBRARIES}
     ${MPFR_LIBRARIES}
 )
+
+target_link_libraries(kcalc_lib
+    Qt5::Core
+    Qt5::Widgets
+    Qt5::Test
+    KF5::ConfigWidgets
+    KF5::GuiAddons
+    KF5::I18n
+    KF5::Notifications
+    KF5::XmlGui
+    KF5::Crash
+    ${GMP_LIBRARIES}
+    ${MPFR_LIBRARIES}
+)
+
+add_subdirectory(tests)
 
 install(TARGETS kdeinit_kcalc ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 
