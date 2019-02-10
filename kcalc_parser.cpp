@@ -2,6 +2,9 @@
 
 #include <QLocale>
 #include <QChar>
+#include <QQueue>
+
+#include <tuple>
 
 void KCalcTokenizer::addFunctionToken(QString functionName)
 {
@@ -156,10 +159,122 @@ QList<KCalcToken> KCalcTokenizer::parse()
     return tokens;
 }
 
+QList<KCalcToken> KCalcParser::preParse(const QString &expression)
+{
+    tokenizer_.setExpressionString(expression);
+    auto tokens = tokenizer_.parse();
+    QList<KCalcToken> finalTokens;
+
+    int bracket_counter = 0;
+    for (auto &token : tokens) {
+        if (token.value == QStringLiteral("(")) {
+            ++bracket_counter;
+        } else if (token.value == QStringLiteral(")")) {
+            --bracket_counter;
+
+            if (bracket_counter < 0) {
+                token.type = INVALID;
+            }
+        }
+
+        finalTokens.push_back(token);
+    }
+
+    for (int i = 0; i < bracket_counter; ++i) {
+        const auto &back = finalTokens.back();
+        finalTokens.push_back(
+                { QStringLiteral(")"),
+                  back.startPos + back.value.length(),
+                  BRACK_CLOSE_MISSING });
+    }
+
+    return finalTokens;
+}
+
+KCalcParser::Node::Node(const QString &identifier, int precedence, Associativity associativity, Notation notation, int operandCount)
+    : identifier_(identifier), precedence_(precedence), associativity_(associativity), notation_(notation), operandCount_(operandCount)
+{
+}
+
+const QString &KCalcParser::Node::getIdentifier() const
+{
+    return identifier_;
+}
+
+int KCalcParser::Node::getPrecedence() const
+{
+    return precedence_;
+}
+
+KCalcParser::Associativity KCalcParser::Node::getAssociativity() const
+{
+    return associativity_;
+}
+
+KCalcParser::Notation KCalcParser::Node::getNotation() const
+{
+    return notation_;
+}
+
+int KCalcParser::Node::getOperandCount() const
+{
+    return operandCount_;
+}
+
+void KCalcParser::registerNode(const QString &mode, TokenType type, Node *node)
+{
+    nodes_[{ mode, type }] = node;
+}
+
+void KCalcParser::setActiveMode(const QString &mode)
+{
+    activeMode_ = mode;
+}
+
+QList<QPair<KCalcParser::Node *, QString>> KCalcParser::parseTokens(const QList<KCalcToken> &tokens)
+{
+    QQueue<std::tuple<Node*, QString, TokenType>> matchedNodes;
+
+    // TODO Maybe sort the tokens by starting pos first
+
+    for(const auto& token : tokens) {
+        // TODO Maybe allow this in order to handle this with custom nodes
+        if(token.type == INVALID || token.type == BRACK_CLOSE_MISSING) {
+            return {};
+        }
+
+        auto foundNode = nodes_.find({token.value, token.type});
+        Q_ASSERT(foundNode != nodes_.end());
+
+        matchedNodes.push_back({*foundNode, token.value, token.type});
+    }
+
+    Q_ASSERT(matchedNodes.size() == tokens.size());
+
+
+    QStack<QPair<Node*, QString>> shuntingStack;
+    QList<QPair<Node*, QString>> outputNodes;
+
+    while(matchedNodes.size() > 0) {
+        auto currentNode = matchedNodes.front();
+        if(std::get<2>(currentNode) == NUMBER) {
+            outputNodes.push_back({std::get<0>(currentNode), std::get<1>(currentNode)});
+            matchedNodes.pop_front();
+            continue;
+        }
+
+
+        
+    }
+
+    return outputNodes;
+}
+
 #include <iostream>
 int main()
 {
-    KCalcTokenizer tokenizer;
+    KCalcParser parser;
+    auto &tokenizer = parser.getTokenizer();
     tokenizer.addFunctionToken(QStringLiteral("sin"));
     tokenizer.addFunctionToken(QStringLiteral("cos"));
     tokenizer.addFunctionToken(QStringLiteral("func"));
@@ -172,9 +287,9 @@ int main()
     tokenizer.addFunctionToken(QStringLiteral(")"));
 
     tokenizer.setNumberMode(HEX);
-    tokenizer.setExpressionString(QStringLiteral("12,sIn(F*AA)+100,0fffunc() AAcos+"));
+    auto list = parser.preParse(QStringLiteral("(12,sIn(F*AA)+100,0fffunc() AAcos+"));
 
-    auto list = tokenizer.parse();
+    /* auto list = tokenizer.parse(); */
 
     for (const auto &t : list) {
         std::cout << t.type << ":" << t.value.toStdString() << " - " << t.startPos << std::endl;

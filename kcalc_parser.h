@@ -7,9 +7,7 @@
 
 enum TokenType {
     NUMBER,
-    OPERATOR,
-    BRACK_OPEN,
-    BRACK_CLOSE,
+    BRACK_CLOSE_MISSING,
     FUNCTION_NAME,
     INVALID
 };
@@ -75,7 +73,7 @@ public:
         explicit Node(const QString &identifier, int precedence, Associativity associativity, Notation notation, int operandCount);
         virtual ~Node() = default;
 
-        virtual KNumber evaluateNode(QList<KNumber> operands) const = 0;
+        virtual KNumber evaluateNode(const QString &nodeValue, QList<KNumber> operands) const = 0;
 
         const QString &getIdentifier() const;
         int getPrecedence() const;
@@ -92,14 +90,10 @@ public:
     };
 
     // TODO: Some other parts of kcalc should already have enums for the different modes
-    void registerParserMode(const QString &name);
-    void registerNode(const QString &mode, Node *node);
-    void setActiveMode(const QString &mode);
+    KCalcTokenizer &getTokenizer() { return tokenizer_; };
 
-    struct PreParseResult {
-        QList<QPair<int, QString>> invalidStrings;
-        QList<QPair<Node*, QString>> tokens;
-    };
+    void registerNode(const QString &mode, TokenType type, Node *node);
+    void setActiveMode(const QString &mode);
 
     /**
      * Function witch does some parsing and determines some validity questions
@@ -108,10 +102,15 @@ public:
      *  - Generate the tokens
      *  - Convert token values
      */
-    PreParseResult preParse(const QString &expression);
+    QList<KCalcToken> preParse(const QString &expression);
+    QList<QPair<Node *, QString>> parseTokens(const QList<KCalcToken> &tokens);
 
 private:
-    QMap<QString, QList<Node *>> nodes_;
+    // Mapes the current mode and token type to an accepting node
+    // --> Only one node per type
+    QMap<QPair<QString, TokenType>, Node *> nodes_;
+    QString activeMode_;
+    KCalcTokenizer tokenizer_;
 };
 
 #endif
