@@ -400,35 +400,3 @@ KNumber InvalidNode::evaluate(const KCalcToken &, QList<KNumber>)
     return KNumber::Zero;
 }
 
-#include <iostream>
-int main()
-{
-    KCalcParser parser;
-    auto &tokenizer = parser.getTokenizer();
-    tokenizer.addFunctionToken(QStringLiteral("sin"));
-    tokenizer.addFunctionToken(QStringLiteral("cos"));
-    tokenizer.addFunctionToken(QStringLiteral("func"));
-
-    parser.setActiveMode(QStringLiteral("main"));
-    parser.registerNode(QStringLiteral("main"), new PowerNode);
-    parser.registerNode(QStringLiteral("main"), new AdditionNode);
-    parser.registerNode(QStringLiteral("main"), new MultiplicationNode);
-    parser.registerNode(QStringLiteral("main"), new BracketNode);
-    parser.registerNode(QStringLiteral("main"), new FunctionNode);
-    parser.registerNode(QStringLiteral("main"), new NumberNode);
-
-    auto list = tokenizer.parse(QStringLiteral("10 (+ 20 + 30"), HEX);
-    auto result = parser.parseTokens(list);
-
-    /* auto list = tokenizer.parse(); */
-
-    for (const auto &t : list) {
-        std::cout << t.type << ":" << t.value.toStdString() << std::endl;
-    }
-
-    for (const auto &r : result) {
-        std::cout << r.first.type << " " << r.first.value.toStdString() << "\n";
-    }
-
-    return 0;
-}
