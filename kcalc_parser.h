@@ -6,164 +6,119 @@
 #include <QMap>
 #include <QObject>
 
-enum TokenType {
-    NUMBER, // 0
-    FUNCTION, // 1
-    BRACKET_OPEN, // 2
-    BRACKET_CLOSE, // 3
-    OP_PLUS, // 4
-    OP_MINUS, // 5
-    OP_MULT, // 6
-    OP_DIV, // 7
-    OP_PWR, // 8
-    INVALID // 9
-};
-
-// TODO Dont use this enum
-enum NumMode {
-    DEC,
-    HEX,
-    OCT,
-    BIN
-};
-
-struct KCalcToken {
-    TokenType type;
-    QString value;
-};
-
-class KCalcTokenizer
-{
-public:
-    void addFunctionToken(QString functionName);
-    bool isValidDigit(const QChar &ch, NumMode numberMode) const;
-    QStringView followsFunction(const QString::Iterator &input, const QString::Iterator &end) const;
-
-    QList<KCalcToken> parse(QString expression, NumMode numberMode) const;
-
-private:
-    QList<QString> function_Names_;
-};
-
-enum Associativity {
-    LEFT,
-    RIGHT
-};
-
-enum Notation {
-    INFIX,
-    POSTFIX,
-    PREFIX
-};
-
-class InvalidNode;
-
-class NodeEvaluator
-{
-public:
-    explicit NodeEvaluator(
-            int precedence = 0,
-            Associativity associativity = LEFT,
-            Notation notation = INFIX,
-            int operandsCount = 2);
-    virtual ~NodeEvaluator() = default;
-    virtual bool accepts(const KCalcToken &token) const = 0;
-    virtual KNumber evaluate(const KCalcToken &token, QList<KNumber> operands) = 0;
-
-    int getPrecedence() const;
-    Associativity getAssociativity() const;
-    Notation getNotation() const;
-    int getOperandCount() const;
-
-private:
-    int precedence_;
-    Associativity associativity_;
-    Notation notation_;
-    int operandCount_;
-};
-
 class KCalcParser : public QObject
 {
     Q_OBJECT
+
 public:
-    KCalcParser(QObject *parent = nullptr);
-    ~KCalcParser();
+    enum TokenType {
+        NUMBER,
+        OPERATOR,
+        INVALID
+    };
 
-    KCalcTokenizer &getTokenizer() { return tokenizer_; };
+    enum NumBase {
+        HEX,
+        DEC,
+        OCT,
+        BIN
+    };
 
-    void registerNode(const QString &mode, NodeEvaluator *NodeEvaluator);
-    void setActiveMode(const QString &mode);
-    QList<QPair<KCalcToken, NodeEvaluator *>> parseTokens(const QList<KCalcToken> &tokesn);
-    InvalidNode *getInvalidNodeEvaluator();
+    struct Token {
+        TokenType type;
+        QString value;
+        long debugPos;
+    };
 
-Q_SIGNALS:
-    void foundMismatchedBrackets();
-    void foundInvalidTokens();
-    void foundUnhandledTokens();
+    class Expression
+    {
+    public:
+        virtual ~Expression() = default;
+        virtual KNumber evaluate() const = 0;
+    };
+
+    class InfixParser
+    {
+    public:
+        virtual ~InfixParser() = default;
+        virtual Expression *parse(KCalcParser &parser, Expression *lhs, const Token &token) = 0;
+        virtual int getPrecedence() const = 0;
+        virtual bool rightAssociative() const { return false; }
+    };
+
+    class PrefixParser
+    {
+    public:
+        virtual ~PrefixParser() = default;
+        virtual Expression *parse(KCalcParser &parser, const Token &token) = 0;
+    };
+
+    void registerParser(const QString &name, InfixParser *parser);
+    void registerParser(const QString &name, PrefixParser *parser);
+
+    void parseExpression(const QString &expression);
+
+    Token consume();
+    const Token &peak() const;
+    Expression *parse(int p = 0);
+
+    void addDefaultParser();
 
 private:
-    NodeEvaluator *findEvaluator(const KCalcToken &token) const;
+    static bool isValidDigit(const QChar &ch, NumBase base);
+    void tokenize();
 
-    QMap<QString, QList<NodeEvaluator *>> evaluators_;
-    KCalcTokenizer tokenizer_;
-    QString activeMode_;
-    InvalidNode *invalidNodeEvaluator_;
+    QStringView findOperator(QString::Iterator position) const;
+    InfixParser *findInfixParser(const QString &value);
+    PrefixParser *findPrefixParser(const QString &value);
+
+    QString currentExpression;
+    QString::Iterator position;
+    QMap<QString, InfixParser *> infixParsers;
+    QMap<QString, PrefixParser *> prefixParsers;
+    QList<Token> tokens_;
 };
 
-class PowerNode : public NodeEvaluator
+class NumberParser : public KCalcParser::PrefixParser
 {
-public:
-    explicit PowerNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+    class NumberExpression : public KCalcParser::Expression
+    {
+    public:
+        explicit NumberExpression(const KCalcParser::Token &token)
+            : token(token)
+        {
+        }
+
+        KNumber evaluate() const override
+        {
+            return KNumber(token.value);
+        }
+
+    private:
+        KCalcParser::Token token;
+    };
+
+    KCalcParser::Expression *parse(KCalcParser &parser, const KCalcParser::Token &token) override
+    {
+        return new NumberExpression(token);
+    }
 };
 
-class MultiplicationNode : public NodeEvaluator
+class AdditionParser : public KCalcParser::InfixParser
 {
 public:
-    explicit MultiplicationNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
-};
+    class AdditionExpression : public KCalcParser::Expression
+    {
+    public:
+        explicit AdditionExpression(Expression *lhs, Expression *rhs);
+        KNumber evaluate() const override;
 
-class AdditionNode : public NodeEvaluator
-{
-public:
-    explicit AdditionNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
-};
+    private:
+        Expression *lhs, *rhs;
+    };
 
-class BracketNode : public NodeEvaluator
-{
-public:
-    explicit BracketNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
-};
-
-class FunctionNode : public NodeEvaluator
-{
-public:
-    explicit FunctionNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
-};
-
-class NumberNode : public NodeEvaluator
-{
-public:
-    explicit NumberNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
-};
-
-class InvalidNode : public NodeEvaluator
-{
-public:
-    explicit InvalidNode();
-    bool accepts(const KCalcToken &token) const override;
-    KNumber evaluate(const KCalcToken &, QList<KNumber>) override;
+    KCalcParser::Expression *parse(KCalcParser &parser, KCalcParser::Expression *lhs, const KCalcParser::Token &token) override;
+    int getPrecedence() const override { return 20; }
 };
 
 #endif

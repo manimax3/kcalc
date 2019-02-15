@@ -20,22 +20,7 @@ constexpr bool isOneOf(T &&t, B &&b, R &&... r)
 }
 }
 
-void KCalcTokenizer::addFunctionToken(QString functionName)
-{
-    bool found = false;
-    for (const auto &func : function_Names_) {
-        if (func.compare(functionName), Qt::CaseInsensitive) {
-            found = true;
-            break;
-        }
-    }
-
-    if (!found) {
-        function_Names_.append(functionName);
-    }
-}
-
-bool KCalcTokenizer::isValidDigit(const QChar &ch, NumMode numberMode) const
+bool KCalcParser::isValidDigit(const QChar &ch, NumBase numberMode)
 {
     switch (ch.toUpper().toLatin1()) {
     case 'F':
@@ -65,338 +50,161 @@ bool KCalcTokenizer::isValidDigit(const QChar &ch, NumMode numberMode) const
     return false;
 }
 
-QStringView KCalcTokenizer::followsFunction(const QString::Iterator &input, const QString::Iterator &end) const
+QStringView KCalcParser::findOperator(QString::Iterator position) const
 {
-    QStringView remainder(input, end - input);
-
-    for (const auto &func : function_Names_) {
-        if (remainder.startsWith(func, Qt::CaseInsensitive)) {
-            return func;
+    const QStringView current(position, currentExpression.end() - position);
+    for (const auto &key : infixParsers.keys()) {
+        if (current.startsWith(key, Qt::CaseInsensitive)) {
+            return key;
         }
     }
 
-    return QStringLiteral();
+    for (const auto &key : prefixParsers.keys()) {
+        if (current.startsWith(key, Qt::CaseInsensitive)) {
+            return key;
+        }
+    }
+
+    return QStringView();
 }
 
-QList<KCalcToken> KCalcTokenizer::parse(QString expression, NumMode numberMode) const
+void KCalcParser::tokenize()
 {
-    static const auto EMPTY = QStringLiteral();
-    auto begin = expression.begin();
-    const auto end = expression.end();
-    QList<KCalcToken> tokens;
+    const auto end = currentExpression.end();
+    const auto start = currentExpression.begin();
 
-    while (begin != end) {
+    while (position != end) {
+        auto foundFunction = findOperator(position);
+        if (foundFunction.length() > 0) {
+            Token token {
+                OPERATOR,
+                foundFunction.toString(),
+                start - position
+            };
 
-        if (begin->isSpace()) {
-            ++begin;
+            position += foundFunction.length();
+            tokens_.push_back(token);
             continue;
         }
 
-        auto follFunction = followsFunction(begin, end);
-        if (follFunction.length() > 0) {
-            tokens.push_back({ FUNCTION, follFunction.toString() });
-            begin += follFunction.length();
-            continue;
-        }
-
-        const QChar currentChar = *begin;
-        switch (currentChar.toLatin1()) {
-        case '+':
-            ++begin;
-            tokens.push_back({ OP_PLUS, EMPTY });
-            continue;
-        case '-':
-            ++begin;
-            tokens.push_back({ OP_MINUS, EMPTY });
-            continue;
-        case '*':
-            ++begin;
-            tokens.push_back({ OP_MULT, EMPTY });
-            continue;
-        case '/':
-            ++begin;
-            tokens.push_back({ OP_DIV, EMPTY });
-            continue;
-        case '^':
-            ++begin;
-            tokens.push_back({ OP_PWR, EMPTY });
-            continue;
-        case '(':
-            ++begin;
-            tokens.push_back({ BRACKET_OPEN, EMPTY });
-            continue;
-        case ')':
-            ++begin;
-            tokens.push_back({ BRACKET_CLOSE, EMPTY });
-            continue;
-        }
-
-        if (isValidDigit(currentChar, numberMode)) {
-            QString number(currentChar);
-            while (++begin != end && isValidDigit(*begin, numberMode) && !(followsFunction(begin, end).length() > 0)) {
-                number.append(*begin);
+        if (isValidDigit(*position, HEX)) { // TODO
+            QString numberValue;
+            while (position != end && isValidDigit(*position, HEX) && findOperator(position).length() == 0) {
+                numberValue.append(*position);
+                ++position;
             }
 
-            if (begin != end && *begin == QLocale().decimalPoint()) {
-                number.append(QLocale().decimalPoint());
-                while (++begin != end && isValidDigit(*begin, numberMode) && !(followsFunction(begin, end).length() > 0)) {
-                    number.append(*begin);
+            if (position != end && *position == QLocale().decimalPoint()) {
+                numberValue.append(*position);
+                ++position;
+                while (position != end && isValidDigit(*position, HEX) && findOperator(position).length() == 0) {
+                    numberValue.append(*position);
+                    ++position;
                 }
             }
 
-            if (number.length() > 0) {
-                tokens.push_back({ NUMBER, number });
-                continue;
-            }
+            tokens_.push_back(Token { NUMBER, std::move(numberValue), start - position });
+            continue;
         }
 
-        tokens.push_back({ INVALID, *begin++ });
+        tokens_.push_back(Token { INVALID, *position++, start - position });
+    }
+}
+
+const KCalcParser::Token &KCalcParser::peak() const
+{
+    return tokens_.front();
+}
+
+KCalcParser::Token KCalcParser::consume()
+{
+    const auto token = tokens_.front();
+    tokens_.pop_front();
+    return token;
+}
+
+void KCalcParser::parseExpression(const QString &expression)
+{
+    currentExpression = expression;
+    position = currentExpression.begin();
+    tokenize();
+}
+
+KCalcParser::Expression *KCalcParser::parse(int p)
+{
+    const auto start = consume();
+    auto *parser = start.type != NUMBER ? findPrefixParser(start.value)
+                                        : new NumberParser;
+
+    if (!parser) {
+        // TODO ERROR
     }
 
-    return tokens;
-}
+    auto *left = parser->parse(*this, start);
 
-NodeEvaluator::NodeEvaluator(int precedence, Associativity associativity, Notation notation, int operandCount)
-    : precedence_(precedence), associativity_(associativity), notation_(notation), operandCount_(operandCount)
-{
-}
-
-int NodeEvaluator::getPrecedence() const
-{
-    return precedence_;
-}
-
-Associativity NodeEvaluator::getAssociativity() const
-{
-    return associativity_;
-}
-
-Notation NodeEvaluator::getNotation() const
-{
-    return notation_;
-}
-
-int NodeEvaluator::getOperandCount() const
-{
-    return operandCount_;
-}
-
-KCalcParser::KCalcParser(QObject *parent)
-    : QObject(parent)
-{
-    invalidNodeEvaluator_ = new InvalidNode;
-}
-
-KCalcParser::~KCalcParser()
-{
-    for (auto &mode : evaluators_) {
-        for (auto &node : mode) {
-            delete node;
+    while (tokens_.size() > 0) {
+        auto next = peak();
+        if (next.type == INVALID) {
+            // TODO ERROR
+            break;
         }
+
+        auto *infparser = findInfixParser(next.value);
+
+        if (!infparser) {
+            // TODO ERROR
+            break;
+        }
+
+        if (infparser->getPrecedence() <= p) {
+            break;
+        }
+
+        left = infparser->parse(*this, left, consume());
     }
 
-    delete invalidNodeEvaluator_;
+    return left;
 }
 
-void KCalcParser::registerNode(const QString &mode, NodeEvaluator *node)
+void KCalcParser::registerParser(const QString &name, InfixParser *parser)
 {
-    // TODO Some checks here
-    evaluators_[mode].push_back(node);
+    infixParsers[name] = parser;
 }
 
-void KCalcParser::setActiveMode(const QString &mode)
+void KCalcParser::registerParser(const QString &name, PrefixParser *parser)
 {
-    activeMode_ = mode;
+    prefixParsers[name] = parser;
 }
 
-NodeEvaluator *KCalcParser::findEvaluator(const KCalcToken &token) const
+KCalcParser::PrefixParser* KCalcParser::findPrefixParser(const QString &name)
 {
-    const auto &evList = evaluators_[activeMode_];
-    for (const auto &ev : evList) {
-        if (ev->accepts(token)) {
-            return ev;
-        }
-    }
-
-    return nullptr;
+    const auto parser = prefixParsers.find(name);
+    return parser != prefixParsers.end() ? *parser : nullptr;
 }
 
-InvalidNode *KCalcParser::getInvalidNodeEvaluator()
+KCalcParser::InfixParser* KCalcParser::findInfixParser(const QString &name)
 {
-    return invalidNodeEvaluator_;
+    const auto parser = infixParsers.find(name);
+    return parser != infixParsers.end() ? *parser : nullptr;
 }
 
-QList<QPair<KCalcToken, NodeEvaluator *>> KCalcParser::parseTokens(const QList<KCalcToken> &tokens)
+void KCalcParser::addDefaultParser()
 {
-    QList<QPair<KCalcToken, NodeEvaluator *>> matchedNodes;
-    QStack<QPair<KCalcToken, NodeEvaluator *>> tokenStack;
-
-    for (const auto &token : tokens) {
-        auto *evaluator = findEvaluator(token);
-
-        if (token.type == INVALID) {
-            emit foundInvalidTokens();
-            continue;
-        }
-
-        if (!evaluator) {
-            matchedNodes.push_back({ token, getInvalidNodeEvaluator() });
-            emit foundUnhandledTokens();
-            continue;
-        }
-
-        if (token.type == NUMBER) {
-            matchedNodes.push_back({ token, evaluator });
-            continue;
-        }
-
-        if (token.type == FUNCTION) {
-            tokenStack.push({ token, evaluator });
-            continue;
-        }
-
-        if (isOneOf(token.type, OP_PLUS, OP_MINUS, OP_MULT, OP_DIV, OP_PWR)) {
-            while (tokenStack.size() > 0 && ((tokenStack.top().first.type == FUNCTION) || (tokenStack.top().second->getPrecedence() > evaluator->getPrecedence()) || (tokenStack.top().second->getPrecedence() == evaluator->getPrecedence() && tokenStack.top().second->getAssociativity() == LEFT))
-                   && tokenStack.top().first.type != BRACKET_OPEN) {
-                matchedNodes.push_back(tokenStack.pop());
-            }
-            tokenStack.push({ token, evaluator });
-            continue;
-        }
-
-        if (token.type == BRACKET_OPEN) {
-            tokenStack.push({ token, evaluator });
-            continue;
-        }
-
-        if (token.type == BRACKET_CLOSE) {
-            while (tokenStack.size() > 0 && tokenStack.top().first.type != BRACKET_OPEN) {
-                matchedNodes.push_back(tokenStack.pop());
-            }
-
-            if (tokenStack.size() == 0) {
-                emit foundMismatchedBrackets();
-            } else {
-                tokenStack.pop();
-            }
-        }
-    }
-
-    while (tokenStack.size() > 0) {
-        if (isOneOf(tokenStack.top().first.type, BRACKET_OPEN, BRACKET_CLOSE)) {
-            emit foundMismatchedBrackets();
-            tokenStack.pop();
-            continue;
-        }
-
-        matchedNodes.push_back(tokenStack.pop());
-    }
-
-    return matchedNodes;
+    registerParser(QStringLiteral("+"), new AdditionParser);
 }
 
-PowerNode::PowerNode()
-    : NodeEvaluator(4, RIGHT)
-{
-}
-bool PowerNode::accepts(const KCalcToken &token) const
-{
-    return token.type == OP_PWR;
-}
-
-KNumber PowerNode::evaluate(const KCalcToken &, QList<KNumber> numbers)
-{
-    Q_UNUSED(numbers);
-    return KNumber::Zero;
-}
-
-MultiplicationNode::MultiplicationNode()
-    : NodeEvaluator(3, LEFT)
-{
-}
-bool MultiplicationNode::accepts(const KCalcToken &token) const
-{
-    return isOneOf(token.type, OP_DIV, OP_MULT);
-}
-
-KNumber MultiplicationNode::evaluate(const KCalcToken &, QList<KNumber>)
-{
-    return KNumber::Zero;
-}
-
-AdditionNode::AdditionNode()
-    : NodeEvaluator(2, LEFT)
+AdditionParser::AdditionExpression::AdditionExpression(Expression *lhs, Expression *rhs)
+    : lhs(lhs), rhs(rhs)
 {
 }
 
-bool AdditionNode::accepts(const KCalcToken &token) const
+KNumber AdditionParser::AdditionExpression::evaluate() const
 {
-    return isOneOf(token.type, OP_PLUS, OP_MINUS);
+    return lhs->evaluate() * rhs->evaluate();
 }
 
-KNumber AdditionNode::evaluate(const KCalcToken &, QList<KNumber>)
+KCalcParser::Expression *AdditionParser::parse(KCalcParser &parser, KCalcParser::Expression *lhs, const KCalcParser::Token &token)
 {
-    return KNumber::Zero;
+    Q_UNUSED(token)
+    return new AdditionExpression(lhs, parser.parse(getPrecedence()));
 }
-
-BracketNode::BracketNode()
-    : NodeEvaluator(1, LEFT)
-{
-}
-
-bool BracketNode::accepts(const KCalcToken &token) const
-{
-    return isOneOf(token.type, BRACKET_OPEN, BRACKET_CLOSE);
-}
-
-KNumber BracketNode::evaluate(const KCalcToken &, QList<KNumber>)
-{
-    return KNumber::Zero;
-}
-
-FunctionNode::FunctionNode()
-    : NodeEvaluator(0, LEFT)
-{
-}
-
-bool FunctionNode::accepts(const KCalcToken &token) const
-{
-    return token.type == FUNCTION;
-}
-
-KNumber FunctionNode::evaluate(const KCalcToken &, QList<KNumber>)
-{
-    return KNumber::Zero;
-}
-
-NumberNode::NumberNode()
-    : NodeEvaluator(-1, LEFT)
-{
-}
-
-bool NumberNode::accepts(const KCalcToken &token) const
-{
-    return token.type == NUMBER;
-}
-
-KNumber NumberNode::evaluate(const KCalcToken &, QList<KNumber>)
-{
-    return KNumber::Zero;
-}
-
-InvalidNode::InvalidNode()
-    : NodeEvaluator(-1, LEFT)
-{
-}
-
-bool InvalidNode::accepts(const KCalcToken &) const
-{
-    return true; // We accept all tokens as valid
-}
-
-KNumber InvalidNode::evaluate(const KCalcToken &, QList<KNumber>)
-{
-    Q_ASSERT("Tried to evaluate invalid node" && false);
-    return KNumber::Zero;
-}
-
