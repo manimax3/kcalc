@@ -200,11 +200,12 @@ AdditionParser::AdditionExpression::AdditionExpression(Expression *lhs, Expressi
 
 KNumber AdditionParser::AdditionExpression::evaluate() const
 {
-    return lhs->evaluate() * rhs->evaluate();
+    return lhs->evaluate() + rhs->evaluate();
 }
 
 KCalcParser::Expression *AdditionParser::parse(KCalcParser &parser, KCalcParser::Expression *lhs, const KCalcParser::Token &token)
 {
-    Q_UNUSED(token)
-    return new AdditionExpression(lhs, parser.parse(getPrecedence()));
+    Q_UNUSED(token);
+    const int precedence = getPrecedence();
+    return new AdditionExpression(lhs, parser.parse(precedence));
 }
