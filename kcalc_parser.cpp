@@ -113,12 +113,7 @@ void KCalcParser::tokenize()
             continue;
         }
 
-        if (position->toLatin1() == ')') {
-            tokens_.push_back(Token { BRACKET_CLOSE, *position++, position - start });
-            continue;
-        }
-
-        tokens_.push_back(Token { INVALID, *position++, position - start });
+        tokens_.push_back(Token { INVALID, *position++, position - start - 1 });
     }
 }
 
@@ -137,25 +132,25 @@ KCalcParser::Token KCalcParser::consume()
 void KCalcParser::expect(TokenType token)
 {
     if (tokens_.size() == 0) {
-        emit expectedToken(token, QStringLiteral());
+        emit foundInvalidToken(currentExpression.length());
         return;
     }
 
     auto next = consume();
     if (next.type != token) {
-        emit expectedToken(token, QStringLiteral());
+        emit foundInvalidToken(next.debugPos);
     }
 }
 void KCalcParser::expect(TokenType type, const QString &value)
 {
     if (tokens_.size() == 0) {
-        emit expectedToken(type, value);
+        emit foundInvalidToken(currentExpression.length());
         return;
     }
 
     auto next = consume();
-    if (next.type != type && next.value != value) {
-        emit expectedToken(type, value);
+    if (next.type != type || next.value != value) {
+        emit foundInvalidToken(next.debugPos);
     }
 }
 
@@ -167,21 +162,27 @@ KNumber KCalcParser::parseExpression(const QString &expression)
     operands_.clear();
     tokenize();
     parse();
+
+    for (const auto &remainder : tokens_) {
+        foundInvalidToken(remainder.debugPos);
+    }
+
     return operands_.top();
 }
 
 void KCalcParser::parse(int p)
 {
-    if(tokens_.size() == 0) {
+    if (tokens_.size() == 0) {
         return;
     }
 
     const auto start = consume();
-    if (start.type != NUMBER) {
+
+    if (start.type == OPERATOR) {
         auto *parser = findPrefixParser(start.value);
 
         if (!parser) {
-            emit foundInvalidToken(start);
+            emit foundInvalidToken(start.debugPos);
             return;
         }
 
@@ -193,21 +194,29 @@ void KCalcParser::parse(int p)
         }
 
         operands_.push(parser->eval(operands_.pop()));
-    } else {
+    } else if (start.type == NUMBER) {
         operands_.push(KNumber(start.value));
+    } else if (start.type == INVALID) {
+        emit foundInvalidToken(start.debugPos);
+        parse(p);
     }
 
     while (tokens_.size() > 0) {
         auto next = peak();
+
+        if (next.value == QStringLiteral(")")) {
+            break;
+        }
+
         if (next.type == INVALID) {
-            emit foundInvalidToken(consume());
+            emit foundInvalidToken(consume().debugPos);
             continue;
         }
 
         auto *infparser = findInfixParser(next.value);
 
         if (!infparser) {
-            foundInvalidToken(consume());
+            foundInvalidToken(consume().debugPos);
             continue;
         }
 
@@ -277,21 +286,21 @@ void KCalcParser::addDefaultParser()
     registerPrefixParser(QStringLiteral("-"), 30, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) { parser.parse(precedence); }, [](KNumber operand) { return -operand; });
 
     registerPrefixParser(QStringLiteral("("), 0, [](KCalcParser &parser, const KCalcParser::Token &, int) {
-        parser.parse(0);
-        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand; });
+        parser.parse();
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand; });
 
     registerPrefixParser(QStringLiteral("sin"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
         parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
         parser.parse();
-        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand.sin(); });
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand.sin(); });
 
     registerPrefixParser(QStringLiteral("cos"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
         parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
         parser.parse();
-        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand.cos(); });
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand.cos(); });
 
     registerPrefixParser(QStringLiteral("func"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
         parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
         parser.parse();
-        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand + KNumber(10); });
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand + KNumber(10); });
 }

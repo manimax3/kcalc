@@ -15,7 +15,6 @@ public:
     enum TokenType {
         NUMBER,
         OPERATOR,
-        BRACKET_CLOSE,
         INVALID
     };
 
@@ -73,8 +72,8 @@ public:
     void addDefaultParser();
 
 Q_SIGNALS:
-    void expectedToken(KCalcParser::TokenType type, QString value);
-    void foundInvalidToken(KCalcParser::Token token);
+    /* void unexpectedToken(int pos); */
+    void foundInvalidToken(int pos);
 
 private:
     static bool isValidDigit(const QChar &ch, NumBase base);
