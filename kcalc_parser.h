@@ -5,6 +5,7 @@
 #include <QStack>
 #include <QMap>
 #include <QObject>
+#include <QDebug>
 
 class KCalcParser : public QObject
 {
@@ -15,8 +16,7 @@ public:
         NUMBER,
         OPERATOR,
         BRACKET_CLOSE,
-        INVALID,
-        EOS
+        INVALID
     };
 
     enum NumBase {
@@ -32,38 +32,49 @@ public:
         long debugPos;
     };
 
-    class InfixParser
-    {
-    public:
-        virtual ~InfixParser() = default;
-        virtual void parse(KCalcParser &parser, const Token &token) = 0;
-        virtual int getPrecedence() const = 0;
-        virtual bool rightAssociative() const { return false; }
+    using ParseFunc = int (*)(KCalcParser &, const Token &, int);
+    using EvaluateFunc = KNumber (*)(const QList<KNumber> &operands);
+
+    using PrefParseFunc = void (*)(KCalcParser &, const Token &, int);
+    using PrefEvaluateFunc = KNumber (*)(KNumber operand);
+
+    struct InfixParser {
+        int precedence;
+        bool leftassociative;
+        ParseFunc parse;
+        EvaluateFunc eval;
     };
 
-    class PrefixParser
-    {
-    public:
-        virtual ~PrefixParser() = default;
-        virtual void parse(KCalcParser &parser, const Token &token) = 0;
+    struct PrefixParser {
+        int precedence;
+        PrefParseFunc parse;
+        PrefEvaluateFunc eval;
     };
 
-    void registerParser(const QString &name, InfixParser *parser);
-    void registerParser(const QString &name, PrefixParser *parser);
+    void registerInfixParser(const QString &name,
+                             int precedence,
+                             ParseFunc parse,
+                             EvaluateFunc eval,
+                             bool leftassociative = true);
 
-    void parseExpression(const QString &expression);
+    void registerPrefixParser(const QString &name,
+                              int precedence,
+                              PrefParseFunc parse,
+                              PrefEvaluateFunc eval);
+
+    KNumber parseExpression(const QString &expression);
 
     Token consume();
     const Token &peak() const;
     void parse(int p = 0);
     void expect(TokenType token);
+    void expect(TokenType type, const QString &value);
 
     void addDefaultParser();
 
-    QList<Token> output;
-
 Q_SIGNALS:
-    void unexpectedToken(const Token &token, TokenType expected);
+    void expectedToken(KCalcParser::TokenType type, QString value);
+    void foundInvalidToken(KCalcParser::Token token);
 
 private:
     static bool isValidDigit(const QChar &ch, NumBase base);
@@ -75,69 +86,12 @@ private:
 
     QString currentExpression;
     QString::Iterator position;
-    QMap<QString, InfixParser *> infixParsers;
-    QMap<QString, PrefixParser *> prefixParsers;
+    QMap<QString, InfixParser> infixParsers;
+    QMap<QString, PrefixParser> prefixParsers;
     QList<Token> tokens_;
+    QStack<KNumber> operands_;
 };
 
-class NumberParser : public KCalcParser::PrefixParser
-{
-public:
-    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
-    {
-        parser.output.push_back(token);
-    }
-};
-
-class AdditionParser : public KCalcParser::InfixParser
-{
-public:
-    void parse(KCalcParser &parser, const KCalcParser::Token &token) override;
-    int getPrecedence() const override { return 20; }
-};
-
-class SubtractionParser : public KCalcParser::InfixParser
-{
-public:
-    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
-    {
-        parser.parse(this->getPrecedence());
-        parser.output.push_back(token);
-    }
-
-    int getPrecedence() const override { return 20; }
-};
-
-class NegationParser : public KCalcParser::PrefixParser
-{
-public:
-    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
-    {
-        parser.parse(100);
-        parser.output.push_back(token);
-    }
-};
-
-class GroupParser : public KCalcParser::PrefixParser
-{
-public:
-    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
-    {
-        parser.parse(0);
-        parser.expect(KCalcParser::BRACKET_CLOSE);
-    }
-};
-
-class MultiplicationParser : public KCalcParser::InfixParser
-{
-public:
-    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
-    {
-        parser.parse(this->getPrecedence());
-        parser.output.push_back(token);
-    }
-
-    int getPrecedence() const override { return 40; }
-};
-
+Q_DECLARE_METATYPE(KCalcParser::TokenType);
+Q_DECLARE_METATYPE(KCalcParser::Token);
 #endif

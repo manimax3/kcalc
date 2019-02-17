@@ -74,6 +74,12 @@ void KCalcParser::tokenize()
     const auto start = currentExpression.begin();
 
     while (position != end) {
+
+        if (position->isSpace()) {
+            ++position;
+            continue;
+        }
+
         auto foundFunction = findOperator(position);
         if (foundFunction.length() > 0) {
             Token token {
@@ -118,109 +124,174 @@ void KCalcParser::tokenize()
 
 const KCalcParser::Token &KCalcParser::peak() const
 {
-    if (tokens_.size() > 0) {
-        return tokens_.front();
-    } else {
-        static Token t { EOS, QStringLiteral(), -1 };
-        return t;
-    }
+    return tokens_.front();
 }
 
 KCalcParser::Token KCalcParser::consume()
 {
-    if (tokens_.size() > 0) {
-        const auto token = tokens_.front();
-        tokens_.pop_front();
-        return token;
-    } else {
-        static Token t { EOS, QStringLiteral(), -1 };
-        return t;
-    }
+    const auto token = tokens_.front();
+    tokens_.pop_front();
+    return token;
 }
 
 void KCalcParser::expect(TokenType token)
 {
+    if (tokens_.size() == 0) {
+        emit expectedToken(token, QStringLiteral());
+        return;
+    }
+
     auto next = consume();
-    if (next.type != token)
-        emit unexpectedToken(next, token);
+    if (next.type != token) {
+        emit expectedToken(token, QStringLiteral());
+    }
+}
+void KCalcParser::expect(TokenType type, const QString &value)
+{
+    if (tokens_.size() == 0) {
+        emit expectedToken(type, value);
+        return;
+    }
+
+    auto next = consume();
+    if (next.type != type && next.value != value) {
+        emit expectedToken(type, value);
+    }
 }
 
-void KCalcParser::parseExpression(const QString &expression)
+KNumber KCalcParser::parseExpression(const QString &expression)
 {
     currentExpression = expression;
     position = currentExpression.begin();
+    tokens_.clear();
+    operands_.clear();
     tokenize();
+    parse();
+    return operands_.top();
 }
 
 void KCalcParser::parse(int p)
 {
-    const auto start = consume();
-    auto *parser = start.type != NUMBER ? findPrefixParser(start.value)
-                                        : new NumberParser;
-
-    if (!parser) {
-        emit unexpectedToken(start, OPERATOR);
+    if(tokens_.size() == 0) {
         return;
     }
 
-    parser->parse(*this, start);
+    const auto start = consume();
+    if (start.type != NUMBER) {
+        auto *parser = findPrefixParser(start.value);
+
+        if (!parser) {
+            emit foundInvalidToken(start);
+            return;
+        }
+
+        parser->parse(*this, start, parser->precedence);
+
+        if (operands_.size() < 1) {
+            // todo error
+            return;
+        }
+
+        operands_.push(parser->eval(operands_.pop()));
+    } else {
+        operands_.push(KNumber(start.value));
+    }
 
     while (tokens_.size() > 0) {
         auto next = peak();
         if (next.type == INVALID) {
-            emit unexpectedToken(next, OPERATOR);
-            break;
+            emit foundInvalidToken(consume());
+            continue;
         }
 
         auto *infparser = findInfixParser(next.value);
 
         if (!infparser) {
-            unexpectedToken(next, OPERATOR);
+            foundInvalidToken(consume());
+            continue;
+        }
+
+        if (infparser->precedence <= p) {
             break;
         }
 
-        if (infparser->getPrecedence() <= p) {
-            break;
+        int opCount = infparser->parse(*this, consume(), infparser->precedence);
+        if (operands_.size() < opCount) {
+            // todo error
+            return;
         }
 
-        infparser->parse(*this, consume());
+        QList<KNumber> ops;
+        for (int i = 0; i < opCount; ++i) {
+            ops.push_front(operands_.pop());
+        }
+        operands_.push(infparser->eval(ops));
     }
 }
 
-void KCalcParser::registerParser(const QString &name, InfixParser *parser)
+void KCalcParser::registerInfixParser(const QString &name, int precedence,
+                                      ParseFunc parse, EvaluateFunc eval, bool leftassociative)
 {
-    infixParsers[name] = parser;
+    infixParsers[name] = InfixParser { precedence, leftassociative, parse, eval };
 }
 
-void KCalcParser::registerParser(const QString &name, PrefixParser *parser)
+void KCalcParser::registerPrefixParser(const QString &name, int precedence,
+                                       PrefParseFunc parse, PrefEvaluateFunc eval)
 {
-    prefixParsers[name] = parser;
+    prefixParsers[name] = PrefixParser { precedence, parse, eval };
 }
 
 KCalcParser::PrefixParser *KCalcParser::findPrefixParser(const QString &name)
 {
     const auto parser = prefixParsers.find(name);
-    return parser != prefixParsers.end() ? *parser : nullptr;
+    return parser != prefixParsers.end() ? &(*parser) : nullptr;
 }
 
 KCalcParser::InfixParser *KCalcParser::findInfixParser(const QString &name)
 {
     const auto parser = infixParsers.find(name);
-    return parser != infixParsers.end() ? *parser : nullptr;
+    return parser != infixParsers.end() ? &(*parser) : nullptr;
 }
 
 void KCalcParser::addDefaultParser()
 {
-    registerParser(QStringLiteral("+"), new AdditionParser);
-    registerParser(QStringLiteral("*"), new MultiplicationParser);
-    registerParser(QStringLiteral("-"), new SubtractionParser);
-    registerParser(QStringLiteral("-"), new NegationParser);
-    registerParser(QStringLiteral("("), new GroupParser);
-}
+    registerInfixParser(QStringLiteral("+"), 10, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) {
+        parser.parse(precedence);
+        return 2; }, [](const QList<KNumber> &operands) { return operands[0] + operands[1]; });
 
-void AdditionParser::parse(KCalcParser &parser, const KCalcParser::Token &token)
-{
-    const int precedence = getPrecedence();
-    parser.parse(precedence);
-    parser.output.push_back(token);
+    registerInfixParser(QStringLiteral("-"), 10, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) {
+        parser.parse(precedence);
+        return 2; }, [](const QList<KNumber> &operands) { return operands[0] - operands[1]; });
+
+    registerInfixParser(QStringLiteral("*"), 20, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) {
+        parser.parse(precedence);
+        return 2; }, [](const QList<KNumber> &operands) { return operands[0] * operands[1]; });
+
+    registerInfixParser(QStringLiteral("/"), 20, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) {
+        parser.parse(precedence); return 2; }, [](const QList<KNumber> &operands) { return operands[0] / operands[1]; });
+
+    registerInfixParser(QStringLiteral("^"), 25, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) {
+        parser.parse(precedence); return 2; }, [](const QList<KNumber> &operands) { return operands[0].pow(operands[1]); },
+                        false);
+
+    registerPrefixParser(QStringLiteral("-"), 30, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) { parser.parse(precedence); }, [](KNumber operand) { return -operand; });
+
+    registerPrefixParser(QStringLiteral("("), 0, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.parse(0);
+        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand; });
+
+    registerPrefixParser(QStringLiteral("sin"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
+        parser.parse();
+        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand.sin(); });
+
+    registerPrefixParser(QStringLiteral("cos"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
+        parser.parse();
+        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand.cos(); });
+
+    registerPrefixParser(QStringLiteral("func"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
+        parser.parse();
+        parser.expect(KCalcParser::BRACKET_CLOSE); }, [](KNumber operand) { return operand + KNumber(10); });
 }
