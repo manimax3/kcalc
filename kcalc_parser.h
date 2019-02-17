@@ -14,7 +14,9 @@ public:
     enum TokenType {
         NUMBER,
         OPERATOR,
-        INVALID
+        BRACKET_CLOSE,
+        INVALID,
+        EOS
     };
 
     enum NumBase {
@@ -30,18 +32,11 @@ public:
         long debugPos;
     };
 
-    class Expression
-    {
-    public:
-        virtual ~Expression() = default;
-        virtual KNumber evaluate() const = 0;
-    };
-
     class InfixParser
     {
     public:
         virtual ~InfixParser() = default;
-        virtual Expression *parse(KCalcParser &parser, Expression *lhs, const Token &token) = 0;
+        virtual void parse(KCalcParser &parser, const Token &token) = 0;
         virtual int getPrecedence() const = 0;
         virtual bool rightAssociative() const { return false; }
     };
@@ -50,7 +45,7 @@ public:
     {
     public:
         virtual ~PrefixParser() = default;
-        virtual Expression *parse(KCalcParser &parser, const Token &token) = 0;
+        virtual void parse(KCalcParser &parser, const Token &token) = 0;
     };
 
     void registerParser(const QString &name, InfixParser *parser);
@@ -60,9 +55,15 @@ public:
 
     Token consume();
     const Token &peak() const;
-    Expression *parse(int p = 0);
+    void parse(int p = 0);
+    void expect(TokenType token);
 
     void addDefaultParser();
+
+    QList<Token> output;
+
+Q_SIGNALS:
+    void unexpectedToken(const Token &token, TokenType expected);
 
 private:
     static bool isValidDigit(const QChar &ch, NumBase base);
@@ -81,44 +82,62 @@ private:
 
 class NumberParser : public KCalcParser::PrefixParser
 {
-    class NumberExpression : public KCalcParser::Expression
+public:
+    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
     {
-    public:
-        explicit NumberExpression(const KCalcParser::Token &token)
-            : token(token)
-        {
-        }
-
-        KNumber evaluate() const override
-        {
-            return KNumber(token.value);
-        }
-
-    private:
-        KCalcParser::Token token;
-    };
-
-    KCalcParser::Expression *parse(KCalcParser &parser, const KCalcParser::Token &token) override
-    {
-        return new NumberExpression(token);
+        parser.output.push_back(token);
     }
 };
 
 class AdditionParser : public KCalcParser::InfixParser
 {
 public:
-    class AdditionExpression : public KCalcParser::Expression
-    {
-    public:
-        explicit AdditionExpression(Expression *lhs, Expression *rhs);
-        KNumber evaluate() const override;
-
-    private:
-        Expression *lhs, *rhs;
-    };
-
-    KCalcParser::Expression *parse(KCalcParser &parser, KCalcParser::Expression *lhs, const KCalcParser::Token &token) override;
+    void parse(KCalcParser &parser, const KCalcParser::Token &token) override;
     int getPrecedence() const override { return 20; }
+};
+
+class SubtractionParser : public KCalcParser::InfixParser
+{
+public:
+    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
+    {
+        parser.parse(this->getPrecedence());
+        parser.output.push_back(token);
+    }
+
+    int getPrecedence() const override { return 20; }
+};
+
+class NegationParser : public KCalcParser::PrefixParser
+{
+public:
+    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
+    {
+        parser.parse(100);
+        parser.output.push_back(token);
+    }
+};
+
+class GroupParser : public KCalcParser::PrefixParser
+{
+public:
+    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
+    {
+        parser.parse(0);
+        parser.expect(KCalcParser::BRACKET_CLOSE);
+    }
+};
+
+class MultiplicationParser : public KCalcParser::InfixParser
+{
+public:
+    void parse(KCalcParser &parser, const KCalcParser::Token &token) override
+    {
+        parser.parse(this->getPrecedence());
+        parser.output.push_back(token);
+    }
+
+    int getPrecedence() const override { return 40; }
 };
 
 #endif
