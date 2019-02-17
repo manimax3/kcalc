@@ -43,13 +43,8 @@ private Q_SLOTS:
         QFETCH(QString, input);
         QFETCH(int, expected);
 
-        QSignalSpy spy(parser, SIGNAL(expectedToken(KCalcParser::TokenType, QString)));
-
-        /* QObject::connect(parser, &KCalcParser::expectedToken, [](KCalcParser::TokenType type, QString value) { */
-        /*     qDebug() << value; */
-        /* }); */
-
-        auto resul = parser->parseExpression(input);
+        QSignalSpy spy(parser, SIGNAL(foundInvalidToken(int)));
+        parser->parseExpression(input);
 
         QCOMPARE(spy.count(), expected);
     }
@@ -70,7 +65,7 @@ private Q_SLOTS:
         QFETCH(QString, input);
         QFETCH(QList<int>, positions);
 
-        QSignalSpy spy(parser, SIGNAL(foundInvalidToken(KCalcParser::Token)));
+        QSignalSpy spy(parser, SIGNAL(foundInvalidToken(int)));
 
         auto resul = parser->parseExpression(input);
 
@@ -92,7 +87,7 @@ private Q_SLOTS:
         QTest::addRow("1") << "10 + func(5)" << 25;
         QTest::addRow("2") << "5 * 10 + func(5)" << 65;
         QTest::addRow("3") << "func(5)" << 15;
-        QTest::addRow("4") << "(10 - 2) + (func 5)" << 23;
+        QTest::addRow("4") << "(10 - 2) + (func (5))" << 23;
         QTest::addRow("5") << "10 + func(5*10)" << 70;
         QTest::addRow("6") << "func(5) * 10" << 150;
         QTest::addRow("7") << "func(10) / 2" << 10;
