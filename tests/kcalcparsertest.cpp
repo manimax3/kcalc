@@ -11,8 +11,10 @@ private Q_SLOTS:
     void initTestCase()
     {
         parser = new KCalcParser;
-        parser->setupDefaultNodesAndTokens(QStringLiteral("main"));
-        parser->setActiveMode(QStringLiteral("main"));
+        parser->addDefaultParser();
+        /* parser->setActiveMode(QStringLiteral("main")); */
+        qRegisterMetaType<KCalcParser::Token>();
+        qRegisterMetaType<KCalcParser::TokenType>();
     }
 
     void cleanupTestCase()
@@ -41,9 +43,13 @@ private Q_SLOTS:
         QFETCH(QString, input);
         QFETCH(int, expected);
 
-        QSignalSpy spy(parser, SIGNAL(foundMismatchedBrackets(int)));
-        auto list = parser->tokenize(input, NB_HEX);
-        auto result = parser->parseTokens(list);
+        QSignalSpy spy(parser, SIGNAL(expectedToken(KCalcParser::TokenType, QString)));
+
+        /* QObject::connect(parser, &KCalcParser::expectedToken, [](KCalcParser::TokenType type, QString value) { */
+        /*     qDebug() << value; */
+        /* }); */
+
+        auto resul = parser->parseExpression(input);
 
         QCOMPARE(spy.count(), expected);
     }
@@ -64,9 +70,9 @@ private Q_SLOTS:
         QFETCH(QString, input);
         QFETCH(QList<int>, positions);
 
-        QSignalSpy spy(parser, SIGNAL(foundInvalidTokens(int)));
-        auto list = parser->tokenize(input, NB_HEX);
-        auto result = parser->parseTokens(list);
+        QSignalSpy spy(parser, SIGNAL(foundInvalidToken(KCalcParser::Token)));
+
+        auto resul = parser->parseExpression(input);
 
         QCOMPARE(spy.count(), positions.size());
 
@@ -99,17 +105,12 @@ private Q_SLOTS:
     {
         QFETCH(QString, input);
         QFETCH(int, result);
+        auto evaluated = parser->parseExpression(input);
 
-        auto list = parser->tokenize(input, NB_HEX);
-        auto parsed = parser->parseTokens(list);
-        auto evaluated = static_cast<int>(parser->evaluateTokens(parsed).toInt64());
-
-        QCOMPARE(evaluated, result);
+        QCOMPARE(evaluated, KNumber(result));
 
         QBENCHMARK {
-             parser->tokenize(input, NB_HEX);
-             parser->parseTokens(list);
-             parser->evaluateTokens(parsed).toInt64();
+            parser->parseExpression(input);
         }
     }
 
