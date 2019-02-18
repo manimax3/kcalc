@@ -49,6 +49,7 @@ class KCalcStatusBar;
 #include "kcalc_core.h"
 #include "kcalc_button.h"
 #include "kcalc_const_button.h"
+#include "kcalc_parser.h"
 
 #include "ui_kcalc.h"
 #include "ui_general.h"
@@ -280,6 +281,7 @@ private:
     QList<QAbstractButton*> operation_button_list_;
 
     CalcEngine core;
+    KCalcParser parser;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(KCalculator::UpdateFlags)

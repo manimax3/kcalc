@@ -2,10 +2,17 @@
 #define KCALC_PARSER_H value
 
 #include "knumber/knumber.h"
+#include "kcalcdisplay2.h"
 #include <QStack>
 #include <QMap>
 #include <QObject>
 #include <QDebug>
+
+enum AngleMode {
+    A_DEG,
+    A_RAD,
+    A_GRAD
+};
 
 class KCalcParser : public QObject
 {
@@ -16,13 +23,6 @@ public:
         NUMBER,
         OPERATOR,
         INVALID
-    };
-
-    enum NumBase {
-        HEX,
-        DEC,
-        OCT,
-        BIN
     };
 
     struct Token {
@@ -71,8 +71,12 @@ public:
 
     void addDefaultParser();
 
+    void setNumBase(NumBase numbase);
+    NumBase getNumBase() const;
+    void setAngleMode(AngleMode anglemode);
+    AngleMode getAngleMode() const;
+
 Q_SIGNALS:
-    /* void unexpectedToken(int pos); */
     void foundInvalidToken(int pos);
 
 private:
@@ -89,6 +93,8 @@ private:
     QMap<QString, PrefixParser> prefixParsers;
     QList<Token> tokens_;
     QStack<KNumber> operands_;
+    NumBase numberBase_ = NumBase::NB_HEX;
+    AngleMode angleMode_ = AngleMode::A_DEG;
 };
 
 Q_DECLARE_METATYPE(KCalcParser::TokenType);

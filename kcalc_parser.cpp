@@ -29,20 +29,20 @@ bool KCalcParser::isValidDigit(const QChar &ch, NumBase numberMode)
     case 'C':
     case 'B':
     case 'A':
-        return numberMode == HEX;
+        return numberMode == NB_HEX;
     case '9':
     case '8':
-        return (numberMode == DEC || numberMode == HEX);
+        return (numberMode == NB_DECIMAL || numberMode == NB_HEX);
     case '7':
     case '6':
     case '5':
     case '4':
     case '3':
     case '2':
-        return (numberMode == OCT || numberMode == DEC || numberMode == HEX);
+        return (numberMode == NB_OCTAL || numberMode == NB_DECIMAL || numberMode == NB_HEX);
     case '1':
     case '0':
-        return (numberMode == BIN || numberMode == OCT || numberMode == DEC || numberMode == HEX);
+        return (numberMode == NB_BINARY || numberMode == NB_OCTAL || numberMode == NB_DECIMAL || numberMode == NB_HEX);
     default:
         return false;
     }
@@ -52,6 +52,7 @@ bool KCalcParser::isValidDigit(const QChar &ch, NumBase numberMode)
 
 QStringView KCalcParser::findOperator(QString::Iterator position) const
 {
+    // TODO FIXME cosh <=> cos
     const QStringView current(position, currentExpression.end() - position);
     for (const auto &key : infixParsers.keys()) {
         if (current.startsWith(key, Qt::CaseInsensitive)) {
@@ -93,9 +94,9 @@ void KCalcParser::tokenize()
             continue;
         }
 
-        if (isValidDigit(*position, HEX)) { // TODO
+        if (isValidDigit(*position, getNumBase())) { // TODO
             QString numberValue;
-            while (position != end && isValidDigit(*position, HEX) && findOperator(position).length() == 0) {
+            while (position != end && isValidDigit(*position, getNumBase()) && findOperator(position).length() == 0) {
                 numberValue.append(*position);
                 ++position;
             }
@@ -103,7 +104,7 @@ void KCalcParser::tokenize()
             if (position != end && *position == QLocale().decimalPoint()) {
                 numberValue.append(*position);
                 ++position;
-                while (position != end && isValidDigit(*position, HEX) && findOperator(position).length() == 0) {
+                while (position != end && isValidDigit(*position, getNumBase()) && findOperator(position).length() == 0) {
                     numberValue.append(*position);
                     ++position;
                 }
@@ -115,6 +116,26 @@ void KCalcParser::tokenize()
 
         tokens_.push_back(Token { INVALID, *position++, position - start - 1 });
     }
+}
+
+void KCalcParser::setNumBase(NumBase numbase)
+{
+    numberBase_ = numbase;
+}
+
+NumBase KCalcParser::getNumBase() const
+{
+    return numberBase_;
+}
+
+void KCalcParser::setAngleMode(AngleMode anglemode)
+{
+    angleMode_ = anglemode;
+}
+
+AngleMode KCalcParser::getAngleMode() const
+{
+    return angleMode_;
 }
 
 const KCalcParser::Token &KCalcParser::peak() const

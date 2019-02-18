@@ -152,6 +152,7 @@ KCalculator::KCalculator(QWidget *parent) :
 	setBase();
 
 	calc_display->setFocus();
+    parser.addDefaultParser();
 }
 
 //------------------------------------------------------------------------------
@@ -948,12 +949,15 @@ void KCalculator::slotSinclicked() {
 			switch (angle_mode_) {
 			case DegMode:
 				/* core.SinDeg(calc_display->getAmount()); */
+                calc_display->insert(QStringLiteral("sin("));
 				break;
 			case RadMode:
 				/* core.SinRad(calc_display->getAmount()); */
+                calc_display->insert(QStringLiteral("sin("));
 				break;
 			case GradMode:
 				/* core.SinGrad(calc_display->getAmount()); */
+                calc_display->insert(QStringLiteral("sin("));
 				break;
 			}
 		} else {
@@ -1390,6 +1394,8 @@ void KCalculator::slotPeriodclicked() {
 void KCalculator::EnterEqual() {
 
     /* core.enterOperation(calc_display->getAmount(), CalcEngine::FUNC_EQUAL); */
+    auto result = parser.parseExpression(calc_display->text());
+    calc_display->setText(result.toQString());
     updateDisplay(UPDATE_FROM_CORE | UPDATE_STORE_RESULT);
 }
 
