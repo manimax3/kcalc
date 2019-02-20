@@ -32,17 +32,17 @@ bool KCalcParser::isValidDigit(const QChar &ch, NumBase numberMode)
         return numberMode == NB_HEX;
     case '9':
     case '8':
-        return (numberMode == NB_DECIMAL || numberMode == NB_HEX);
+        return isOneOf(numberMode, NB_DECIMAL, NB_HEX);
     case '7':
     case '6':
     case '5':
     case '4':
     case '3':
     case '2':
-        return (numberMode == NB_OCTAL || numberMode == NB_DECIMAL || numberMode == NB_HEX);
+        return isOneOf(numberMode, NB_OCTAL, NB_DECIMAL, NB_HEX);
     case '1':
     case '0':
-        return (numberMode == NB_BINARY || numberMode == NB_OCTAL || numberMode == NB_DECIMAL || numberMode == NB_HEX);
+        return isOneOf(numberMode, NB_BINARY, NB_OCTAL, NB_DECIMAL, NB_HEX);
     default:
         return false;
     }
@@ -324,4 +324,25 @@ void KCalcParser::addDefaultParser()
         parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
         parser.parse();
         parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand + KNumber(10); });
+
+    registerPrefixParser(QStringLiteral("tan"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
+        parser.parse();
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand.tan(); });
+
+    registerPrefixParser(QStringLiteral("log"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
+        parser.parse();
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand.log10(); });
+
+    registerPrefixParser(QStringLiteral("ln"), 50, [](KCalcParser &parser, const KCalcParser::Token &, int) {
+        parser.expect(KCalcParser::OPERATOR, QStringLiteral("("));
+        parser.parse();
+        parser.expect(KCalcParser::INVALID, QStringLiteral(")")); }, [](KNumber operand) { return operand.ln(); });
+
+    registerInfixParser(QStringLiteral("!"), 50, [](KCalcParser &, const KCalcParser::Token &, int) { return 1; }, [](const QList<KNumber> &operand) { return operand[0].factorial(); });
+
+    registerInfixParser(QStringLiteral("mod"), 5, [](KCalcParser &parser, const KCalcParser::Token &, int precedence) { 
+            parser.parse(precedence);
+            return 2; }, [](const QList<KNumber> &operand) { return operand[0] % operand[1]; });
 }

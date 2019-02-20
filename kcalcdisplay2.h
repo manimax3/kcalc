@@ -38,6 +38,11 @@ public:
     QSize sizeHint() const override;
     void initStyleOption(QStyleOptionFrame *option) const;
 
+    void setStatusText(int i, const QString &text);
+
+protected:
+    void paintEvent(QPaintEvent *) override;
+
 private:
     bool beep_ = false;
     bool groupdigits_ = true;
@@ -45,6 +50,8 @@ private:
     int octalGrouping_;
     int hexadecimalGrouping_;
     NumBase num_base_ = NB_DECIMAL;
+
+    QString str_status_[4];
 };
 
 #endif

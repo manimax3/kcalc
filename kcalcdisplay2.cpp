@@ -4,108 +4,12 @@
 #include <QStyle>
 #include <QStyleOption>
 #include <QStack>
-#include <QValidator>
+#include <QPainter>
 
 #include <knotification.h>
 #include <KLocalizedString>
 
 #include "kcalc_settings.h"
-
-namespace {
-class KCalcDisplayValidator : public QValidator
-{
-public:
-    explicit KCalcDisplayValidator(KCalcDisplay2 *display, QWidget *parent = nullptr)
-        : QValidator(parent), display_(display)
-    {
-    }
-
-    void fixup(QString &input) const override
-    {
-        Q_UNUSED(input);
-        // TODO: What can we fix? Brackets, Grouping
-        // This is only run after returnPressed() so find a way to trigger this manually
-        qDebug() << "fixupt";
-    }
-
-    QValidator::State validate(QString &input, int &pos) const override
-    {
-        Q_UNUSED(input);
-        Q_UNUSED(pos);
-
-        // TODO: Things we need to check for:
-        //  1. Brackets validity
-        //  2. Operators validity
-        //  3. Correct number system used ie FF not valid in Dec mode
-        //  3. Correct number grouping
-        //
-        
-        /*
-         * Checking the whole string every time is way too expensive
-         * So we need to check incrementally
-         */
-
-        return validateBrackets(input);
-    }
-
-    /*
-     * Stack based validating? What should we return if wrong? Invalid or Intermediate
-     * Intermediate: Unclosed brackets
-     * Invalid: Closed brackets without matching open bracket
-     */
-    QValidator::State validateBrackets(QString &input) const
-    {
-        int bracketCounter = 0;
-
-        for (const auto &ch : input) {
-            if (ch == QLatin1Char('(')) {
-                ++bracketCounter;
-            } else if (ch == QLatin1Char(')')) {
-                --bracketCounter;
-            }
-
-            if(bracketCounter < 0) {
-                return QValidator::Invalid;
-            }
-        }
-
-        if(bracketCounter > 0) {
-            return QValidator::Intermediate;
-        }
-
-        return QValidator::Acceptable;
-    }
-
-    // For these operations we propbably need to tokenize the string
-
-    QValidator::State validateNumberSystem(QString &input) const
-    {
-        /*
-         * 1. Skip whitespace and characters until valid digit in any number system
-         * 2. Iterate digits and check if number system is valid
-         * 3. keep track of
-         */
-
-        Q_UNUSED(input);
-        return QValidator::Acceptable;
-    }
-
-    QValidator::State validateNumberGrouping(QString &input) const
-    {
-        Q_UNUSED(input);
-        return QValidator::Acceptable;
-    }
-
-    QValidator::State validateOperators(QString &input) const
-    {
-        Q_UNUSED(input);
-        return QValidator::Acceptable;
-    }
-
-private:
-    KCalcDisplay2 *display_;
-};
-}
 
 KCalcDisplay2::KCalcDisplay2(QWidget *parent)
     : QLineEdit(parent)
@@ -115,19 +19,6 @@ KCalcDisplay2::KCalcDisplay2(QWidget *parent)
     setBackgroundRole(QPalette::Base);
     setForegroundRole(QPalette::Text);
     setAlignment(Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
-
-    setValidator(new KCalcDisplayValidator(this, this));
-    connect(this, &KCalcDisplay2::textChanged, this, [this]() {
-
-        return;
-        if (!this->hasAcceptableInput()) {
-            /* this->clear(); */
-            qDebug() << "Cleared";
-        }
-
-    });
-
-    // TODO: Frame style sunken
 
     sendEvent(EventReset);
 }
@@ -166,6 +57,29 @@ void KCalcDisplay2::initStyleOption(QStyleOptionFrame *option) const
     option->midLineWidth = 0;
 }
 
+void KCalcDisplay2::paintEvent(QPaintEvent *e) {
+
+    QLineEdit::paintEvent(e);
+	QPainter painter(this);
+
+	QStyleOptionFrame option;
+	initStyleOption(&option);
+
+	// draw the status texts using half of the normal
+	// font size but not smaller than 7pt
+	QFont fnt(font());
+	fnt.setPointSize(qMax((fnt.pointSize() / 2), 7));
+	painter.setFont(fnt);
+	
+	QFontMetrics fm(fnt);
+	const uint w = fm.width(QStringLiteral("________"));
+	const uint h = fm.height();
+
+	for (int n = 0; n < 4; ++n) {
+		painter.drawText(5 + n * w, h, str_status_[n]);
+	}
+}
+
 void KCalcDisplay2::changeSettings()
 {
     QPalette pal = palette();
@@ -197,4 +111,13 @@ QSize KCalcDisplay2::sizeHint() const
 
     /* TODO FIX this return (style()->sizeFromContents(QStyle::CT_LineEdit, &option, size.expandedTo(QApplication::globalStrut()), this)); */
     return size;
+}
+
+void KCalcDisplay2::setStatusText(int i, const QString &text) {
+
+    if (i < 4) {
+        str_status_[i] = text;
+	}
+	
+    update();
 }
