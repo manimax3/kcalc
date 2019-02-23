@@ -27,12 +27,12 @@ public:
 
     bool sendEvent(Event event);
 
-    void setBeep(bool flag){};
-    void setGroupDigits(bool flag){};
-    void setTwosComplement(bool flag){};
-    void setBinaryGrouping(int digits){};
-    void setOctalGrouping(int digits){};
-    void setHexadecimalGrouping(int digits){};
+    void setBeep(bool flag) {};
+    void setGroupDigits(bool flag) {};
+    void setTwosComplement(bool flag) {};
+    void setBinaryGrouping(int digits) {};
+    void setOctalGrouping(int digits) {};
+    void setHexadecimalGrouping(int digits) {};
 
     void changeSettings();
     QSize sizeHint() const override;

@@ -188,7 +188,11 @@ KNumber KCalcParser::parseExpression(const QString &expression)
         foundInvalidToken(remainder.debugPos);
     }
 
-    return operands_.top();
+    if (operands_.size() > 0) {
+        return operands_.top();
+    }
+
+    return KNumber::Zero;
 }
 
 void KCalcParser::parse(int p)
@@ -216,7 +220,15 @@ void KCalcParser::parse(int p)
 
         operands_.push(parser->eval(operands_.pop()));
     } else if (start.type == NUMBER) {
-        operands_.push(KNumber(start.value));
+
+        bool ok;
+        // The old kcalcdisplay did the conversion like this
+        // but KNumber should be able to do this directly
+        const auto number = start.value.toULongLong(&ok, getNumBase());
+        if (!ok) {
+            emit foundInvalidToken(start.debugPos);
+        }
+        operands_.push(KNumber(number));
     } else if (start.type == INVALID) {
         emit foundInvalidToken(start.debugPos);
         parse(p);

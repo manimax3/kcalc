@@ -13,6 +13,7 @@ private Q_SLOTS:
         parser = new KCalcParser;
         parser->addDefaultParser();
         /* parser->setActiveMode(QStringLiteral("main")); */
+        parser->setNumBase(NumBase::NB_DECIMAL);
         qRegisterMetaType<KCalcParser::Token>();
         qRegisterMetaType<KCalcParser::TokenType>();
     }
