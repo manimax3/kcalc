@@ -34,12 +34,16 @@ public:
     void setOctalGrouping(int digits) {};
     void setHexadecimalGrouping(int digits) {};
 
+    bool getTwosComplement() const { return false; }
+
     void changeSettings();
     QSize sizeHint() const override;
     void initStyleOption(QStyleOptionFrame *option) const;
 
     void setStatusText(int i, const QString &text);
 
+    using QLineEdit::insert;
+    void insert(const KNumber &number, NumBase base);
 protected:
     void paintEvent(QPaintEvent *) override;
 

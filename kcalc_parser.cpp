@@ -223,7 +223,7 @@ void KCalcParser::parse(int p)
 
         bool ok;
         // The old kcalcdisplay did the conversion like this
-        // but KNumber should be able to do this directly
+        // but KNumber *should* be able to do this directly
         const auto number = start.value.toULongLong(&ok, getNumBase());
         if (!ok) {
             emit foundInvalidToken(start.debugPos);

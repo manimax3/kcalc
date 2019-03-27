@@ -113,6 +113,38 @@ QSize KCalcDisplay2::sizeHint() const
     return size;
 }
 
+void KCalcDisplay2::insert(const KNumber &number, NumBase base)
+{
+    KNumber display_amount_;
+    QString display_str;
+	if ((base != NB_DECIMAL) && (number.type() != KNumber::TYPE_ERROR)) {
+		display_amount_ = number.integerPart();
+	
+		if (getTwosComplement()) {
+			// treat number as 64-bit unsigned
+			const quint64 tmp_workaround = display_amount_.toUint64();
+			display_str = QString::number(tmp_workaround, base).toUpper();
+		} else {
+			// QString::number treats non-decimal as unsigned
+			qint64 tmp_workaround = display_amount_.toInt64();
+			const bool neg = tmp_workaround < 0;
+			if (neg) {
+				tmp_workaround = qAbs(tmp_workaround);
+			}
+			
+			display_str = QString::number(tmp_workaround, base).toUpper();
+			if (neg) {
+				display_str.prepend(QLocale().negativeSign());
+			}
+		}
+	} else {
+		// num_base_ == NB_DECIMAL || new_amount.type() == KNumber::TYPE_ERROR
+		display_amount_ = number;
+		display_str = display_amount_.toQString(KCalcSettings::precision());
+	}
+    insert(display_str);
+}
+
 void KCalcDisplay2::setStatusText(int i, const QString &text) {
 
     if (i < 4) {

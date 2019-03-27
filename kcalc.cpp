@@ -924,7 +924,7 @@ void KCalculator::slotMemStoreclicked() {
 //------------------------------------------------------------------------------
 void KCalculator::slotNumberclicked(int number_clicked) {
 
-	calc_display->insert(QString::number(number_clicked));
+	calc_display->insert(KNumber(number_clicked), parser.getNumBase());
 	core.setOnlyUpdateOperation(false);
 }
 
@@ -1397,9 +1397,10 @@ void KCalculator::slotPeriodclicked() {
 //------------------------------------------------------------------------------
 void KCalculator::EnterEqual() {
 
-    /* core.enterOperation(calc_display->getAmount(), CalcEngine::FUNC_EQUAL); */
-    auto result = parser.parseExpression(calc_display->text());
-    calc_display->setText(result.toQString());
+    const auto result = parser.parseExpression(calc_display->text());
+    // TODO if errors
+    calc_display->sendEvent(KCalcDisplay2::EventClear);
+    calc_display->insert(result, parser.getNumBase());
     updateDisplay(UPDATE_FROM_CORE | UPDATE_STORE_RESULT);
 }
 
